@@ -28,7 +28,7 @@ def keep_alive():
 
 
 # ------------------- Config -------------------
-GUILD_ID = 1358184251216105683
+GUILD_ID = 1409557290918477826
 
 # Moderation roles allowed
 
