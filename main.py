@@ -1,7 +1,5 @@
-# Boot message
-print("Booting up...")
-
 import os
+import aiohttp
 from datetime import datetime, timezone
 import discord
 from discord.ext import commands
@@ -10,10 +8,6 @@ from discord.ui import View, Button, Modal, TextInput, Select, UserSelect
 from discord import SelectOption
 from flask import Flask
 from threading import Thread
-import re
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
-import fetch from "node-fetch";
-const FIVEM_API = process.env.FIVEM_API || "http://94.130.130.24:3024/refund";
 
 # ------------------- Keep Alive Webserver -------------------
 app = Flask('')
@@ -29,12 +23,11 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-
 # ------------------- Config -------------------
 GUILD_ID = 1409557290918477826
+FIVEM_API = os.getenv("FIVEM_API") or "http://94.130.130.24:3024/refund"
 
 # Moderation roles allowed
-
 ALLOWED_ROLES = {
     1409557291329392748,
 }
@@ -50,6 +43,10 @@ LOG_CHANNELS = {
     "unban": 1409557293283934247,
 }
 
+TICKET_CATEGORY_ID = 1409228873438199989
+TICKET_STAFF_ROLES = {1409557291329392744}
+TICKET_LOG_CHANNEL_ID = 1409557293283934247
+
 # ------------------- Bot -------------------
 intents = discord.Intents.default()
 intents.message_content = True
@@ -57,8 +54,7 @@ intents.reactions = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
-bot.role_embed_data = {}  # opslag voor role embeds
-
+bot.role_embed_data = {}  # Storage for role embeds
 
 # ------------------- Events -------------------
 @bot.event
@@ -69,7 +65,6 @@ async def on_ready():
         print(f"🌐 Slash commands gesynchroniseerd: {len(synced)}")
     except Exception as e:
         print(f"❌ Fout bij sync: {e}")
-
 
 # ------------------- Embed Modal -------------------
 class EmbedModal(Modal, title="Maak een Embed"):
@@ -110,17 +105,15 @@ class EmbedModal(Modal, title="Maak een Embed"):
 
         await interaction.response.send_message("Kies een kanaal voor je embed:", view=ChannelSelect(), ephemeral=True)
 
-
 @bot.tree.command(name="embed", description="Maak een embed via formulier", guild=discord.Object(id=GUILD_ID))
 async def embed_cmd(interaction: discord.Interaction):
-    allowed_roles = {
-        1358184251471822947,
-    }
+    allowed_roles = {1358184251471822947}
     if not any(r.id in allowed_roles for r in interaction.user.roles):
         await interaction.response.send_message("❌ Je hebt geen toegang tot dit commando.", ephemeral=True)
         return
     await interaction.response.send_modal(EmbedModal())
-  
+
+# ------------------- Role Embed Modal -------------------
 class RoleEmbedModal(Modal, title="Maak een Role Embed"):
     titel = TextInput(
         label="Titel", style=discord.TextStyle.short,
@@ -144,7 +137,6 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # --- Kleur verwerken ---
         kleur_input = self.kleur.value or "#2ecc71"
         if kleur_input.lower() == "none":
             color = discord.Color.default()
@@ -154,7 +146,6 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
             except:
                 color = discord.Color.default()
 
-        # --- Embed maken ---
         embed = discord.Embed(title=self.titel.value, description=self.beschrijving.value, color=color)
         if self.thumbnail.value:
             if self.thumbnail.value.lower() == "serverlogo" and interaction.guild.icon:
@@ -169,7 +160,6 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
         else:
             embed.set_footer(text=f"Gemaakt door {interaction.guild.name}")
 
-        # --- Emoji → Role mapping ---
         raw_map = {}
         for part in self.mapping.value.split(","):
             if ":" in part:
@@ -191,7 +181,6 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
             await interaction.response.send_message("Kon guild niet vinden.", ephemeral=True)
             return
 
-        # --- Kanaal selecteren ---
         options = [SelectOption(label=ch.name, value=str(ch.id)) for ch in guild.text_channels[:25]]
 
         class ChannelSelect(View):
@@ -204,12 +193,9 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
                     return
 
                 message = await kanaal.send(embed=embed)
-
-                # --- Normaliseer mapping naar rol-ID's ---
                 normalized_map = {}
                 for emoji_text, role_part in raw_map.items():
                     role_id = None
-                    # Als het een ID is
                     if role_part.isdigit():
                         try:
                             role_id = int(role_part)
@@ -223,13 +209,11 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
                                 role_id = None
                         except:
                             role_id = None
-                    # Als het een naam is
                     else:
                         role_obj = discord.utils.get(guild.roles, name=role_part)
                         if role_obj:
                             role_id = role_obj.id
 
-                    # Voeg emoji toe aan bericht
                     try:
                         await message.add_reaction(emoji_text)
                         if role_id:
@@ -247,7 +231,6 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
 
         await interaction.response.send_message("Kies een kanaal voor je role embed:", view=ChannelSelect(), ephemeral=True)
 
-# ---------- ROLE EMBED COMMAND ----------
 @bot.tree.command(
     name="roleembed",
     description="Maak een role embed (alleen bepaalde rollen mogen dit)",
@@ -258,10 +241,9 @@ async def roleembed(interaction: discord.Interaction):
     if not any(r.id in allowed_roles for r in interaction.user.roles):
         await interaction.response.send_message("❌ Je hebt geen toegang tot dit commando.", ephemeral=True)
         return
-
     await interaction.response.send_modal(RoleEmbedModal())
 
-# ---------- REACTION → ROLES ----------
+# ------------------- Reaction → Roles -------------------
 async def handle_reaction(payload: discord.RawReactionActionEvent, add=True):
     emoji_map = getattr(bot, "role_embed_data", {}).get(payload.message_id)
     if not emoji_map:
@@ -300,9 +282,9 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     await handle_reaction(payload, add=False)
+
 # ------------------- Helpers -------------------
 async def try_send_dm(user: discord.abc.Messageable, content: str):
-    """Probeer een DM te sturen, maar faal stilletjes zonder te crashen."""
     try:
         await user.send(content)
         return True
@@ -310,7 +292,6 @@ async def try_send_dm(user: discord.abc.Messageable, content: str):
         return False
 
 def make_action_dm(guild_name: str, actie: str, reden: str, moderator: str):
-    """Return DM text voor acties."""
     return (
         f"Je bent **{actie}** in **{guild_name}**.\n"
         f"Reden: {reden}\n"
@@ -318,7 +299,7 @@ def make_action_dm(guild_name: str, actie: str, reden: str, moderator: str):
         f"Tijd: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
     )
 
-# ------------------- Moderatie modal (reden) -------------------
+# ------------------- Moderatie Modal -------------------
 class ModeratieModal(Modal, title="Reden"):
     reden = TextInput(label="Reden", style=discord.TextStyle.paragraph, placeholder="Geef een reden", required=True)
 
@@ -340,7 +321,6 @@ class ModeratieModal(Modal, title="Reden"):
                     return
 
                 me = guild.me
-                # permission & hierarchy checks
                 if action == "ban" and not me.guild_permissions.ban_members:
                     await interaction.response.send_message("❌ Bot mist 'Ban Members' permissie.", ephemeral=True)
                     return
@@ -354,21 +334,16 @@ class ModeratieModal(Modal, title="Reden"):
                     await interaction.response.send_message("❌ Kan deze gebruiker niet modereren: hogere of gelijke rol dan de bot.", ephemeral=True)
                     return
 
-                # Probeer DM te sturen vóór de actie (zodat ze het bericht ontvangen)
                 dm_text = make_action_dm(guild.name if guild else "de server", action.upper(), self.reden.value, moderator.mention)
                 dm_ok = await try_send_dm(member, dm_text)
 
-                # Execute action
                 if action == "ban":
                     await member.ban(reason=self.reden.value)
                 elif action == "kick":
                     await member.kick(reason=self.reden.value)
                 elif action == "warn":
-                    # Placeholder: extend with persistent warn store if desired
-                    # still send DM (done above)
-                    pass
+                    pass  # Placeholder for persistent warn store
 
-                # Logging to channel
                 log_id = LOG_CHANNELS.get(action)
                 if log_id:
                     log_chan = guild.get_channel(log_id)
@@ -396,13 +371,10 @@ class ModeratieModal(Modal, title="Reden"):
         except Exception as exc:
             await interaction.response.send_message(f"❌ Fout bij uitvoeren: {exc}", ephemeral=True)
 
-# ------------------- Unban modal (top-level, executes unban directly) -------------------
+# ------------------- Unban Modal -------------------
 class UnbanModal(Modal, title="Unban gebruiker (ID)"):
     user_id = TextInput(label="User ID", style=discord.TextStyle.short, placeholder="Bijv. 123456789012345678", required=True)
     reden = TextInput(label="Reden (optioneel)", style=discord.TextStyle.paragraph, placeholder="Reden (optioneel)", required=False)
-
-    def __init__(self):
-        super().__init__()
 
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -411,12 +383,10 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message("❌ Guild niet gevonden.", ephemeral=True)
             return
 
-        # check permission
         if not guild.me.guild_permissions.ban_members:
             await interaction.response.send_message("❌ Bot mist 'Ban Members' permissie (nodig voor unban).", ephemeral=True)
             return
 
-        # parse ID
         try:
             uid = int(self.user_id.value.strip())
         except Exception:
@@ -425,7 +395,6 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
 
         reason_text = self.reden.value or "Geen reden opgegeven"
 
-        # fetch bans (compatibel met multiple discord.py builds)
         try:
             bans = await guild.bans()
         except TypeError:
@@ -436,7 +405,6 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message("❌ Deze user ID is niet geband (of niet gevonden).", ephemeral=True)
             return
 
-        # try unban
         try:
             await guild.unban(ban_entry.user, reason=reason_text)
         except discord.Forbidden:
@@ -446,11 +414,9 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message(f"❌ Unban faalde: {e}", ephemeral=True)
             return
 
-        # Probeer DM naar gebruiker ná unban
         dm_text = make_action_dm(guild.name, "UNBAN", reason_text, moderator.mention)
         try_send = await try_send_dm(ban_entry.user, dm_text)
 
-        # log to unban channel
         log_id = LOG_CHANNELS.get("unban")
         if log_id:
             log_channel = guild.get_channel(log_id)
@@ -479,12 +445,10 @@ class ModeratieView(View):
         self.actie: str | None = None
         self.reden: str | None = None
 
-        # user select
         user_select = UserSelect(placeholder="Kies een gebruiker", min_values=1, max_values=1)
         user_select.callback = self._user_selected
         self.add_item(user_select)
 
-        # buttons
         for label, style, attr in [
             ("Ban", discord.ButtonStyle.danger, "ban"),
             ("Kick", discord.ButtonStyle.primary, "kick"),
@@ -515,18 +479,15 @@ class ModeratieView(View):
 
     def make_callback(self, actie: str):
         async def callback(interaction: discord.Interaction):
-            # permission sets
             permitted = UNBAN_ROLES if actie == "unban" else ALLOWED_ROLES
             if not any(r.id in permitted for r in interaction.user.roles):
                 await interaction.response.send_message("❌ Je hebt hier geen toestemming voor.", ephemeral=True)
                 return
 
             if actie == "unban":
-                # open unban modal to collect ID + reason
                 await interaction.response.send_modal(UnbanModal())
                 return
 
-            # for ban/kick/warn: need a selected member
             if self.target_member is None:
                 await interaction.response.send_message("❌ Kies eerst een gebruiker.", ephemeral=True)
                 return
@@ -536,7 +497,6 @@ class ModeratieView(View):
 
         return callback
 
-# ------------------- Slash command to open menu -------------------
 @bot.tree.command(name="moderatie", description="Open het moderatie UI menu", guild=discord.Object(id=GUILD_ID))
 async def moderatie(interaction: discord.Interaction):
     if not any(r.id in (ALLOWED_ROLES | UNBAN_ROLES) for r in interaction.user.roles):
@@ -544,17 +504,11 @@ async def moderatie(interaction: discord.Interaction):
         return
     await interaction.response.send_message("Moderatie menu:", view=ModeratieView(interaction.user), ephemeral=True)
 
-
-# ✅ Rol-IDs die mogen
-ALLOWED_ROLES = {
-    1409557291329392748,
-}
-
+# ------------------- Role Check -------------------
 def has_allowed_role(interaction: discord.Interaction) -> bool:
-    """Checkt of gebruiker minstens 1 van de toegestane rollen heeft."""
     return any(r.id in ALLOWED_ROLES for r in interaction.user.roles)
 
-# Debug commands: checkban + listbans
+# ------------------- Debug Commands -------------------
 @bot.tree.command(name="checkban", description="Check of een user ID geband is in deze server", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user_id="Discord user ID (alleen cijfers)")
 async def checkban(interaction: discord.Interaction, user_id: str):
@@ -584,7 +538,6 @@ async def checkban(interaction: discord.Interaction, user_id: str):
         await interaction.response.send_message(embed=emb, ephemeral=True)
     else:
         await interaction.response.send_message("❌ Deze user ID is niet geband in deze server.", ephemeral=True)
-
 
 @bot.tree.command(name="listbans", description="Laat de laatste N bans zien (debug)", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(limit="Hoeveel bans tonen (max 25)")
@@ -618,16 +571,12 @@ async def listbans(interaction: discord.Interaction, limit: int = 10):
     )
     await interaction.response.send_message(embed=emb, ephemeral=True)
 
-# --- CLEAR COMMAND ---
+# ------------------- Clear Command -------------------
 @bot.tree.command(name="clear", description="Verwijder berichten uit een kanaal", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(amount="Aantal berichten om te verwijderen (of 'all')")
 async def clear(interaction: discord.Interaction, amount: str):
-    ALLOWED_ROLES = {
-        1409557291329392745, 
-    }
-
-    # Check of de gebruiker een van de rollen heeft
-    if not any(r.id in ALLOWED_ROLES for r in interaction.user.roles):
+    CLEAR_ALLOWED_ROLES = {1409557291329392745}
+    if not any(r.id in CLEAR_ALLOWED_ROLES for r in interaction.user.roles):
         await interaction.response.send_message("❌ Je hebt geen toestemming om dit commando te gebruiken.", ephemeral=True)
         return
 
@@ -638,7 +587,6 @@ async def clear(interaction: discord.Interaction, amount: str):
 
     try:
         if amount.lower() == "all":
-            # Verwijder ALLES in dit kanaal
             await channel.purge(limit=None)
             await interaction.followup.send("🧹 Alle berichten in dit kanaal zijn verwijderd!", ephemeral=True)
             return
@@ -655,12 +603,29 @@ async def clear(interaction: discord.Interaction, amount: str):
     except ValueError:
         await interaction.followup.send("❌ Ongeldig aantal, gebruik een getal of 'all'.", ephemeral=True)
 
+# ------------------- Refund Command -------------------
+@bot.tree.command(name="refund", description="Geef een speler een refund via FiveM", guild=discord.Object(id=GUILD_ID))
+@app_commands.describe(player_id="Player ID", amount="Bedrag")
+async def refund(interaction: discord.Interaction, player_id: str, amount: int):
+    if not has_allowed_role(interaction):
+        await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
+        return
 
-# ------------------- Ticket Transcript -------------------
-
-TICKET_CATEGORY_ID = 1409228873438199989  # <-- pas dit aan naar je ticket categorie ID
-TICKET_STAFF_ROLES = {1409557291329392744}  # staff die toegang krijgt
-TICKET_LOG_CHANNEL_ID = 1409557293283934247  # <-- log kanaal ID (staff-only)
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                FIVEM_API,
+                json={"playerId": player_id, "amount": amount},
+                headers={"Content-Type": "application/json"}
+            ) as response:
+                data = await response.json()
+                if data.get("success"):
+                    await interaction.response.send_message(f"✅ Refund van **{amount}** gegeven aan speler **{player_id}**.")
+                else:
+                    await interaction.response.send_message(f"❌ Refund mislukt: {data.get('error', 'onbekende fout')}")
+        except Exception as e:
+            await interaction.response.send_message("❌ Kon geen verbinding maken met FiveM API.", ephemeral=True)
+            print(f"Error in refund command: {e}")
 
 # ------------------- Ticket Modal -------------------
 class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
@@ -668,7 +633,6 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
         super().__init__(timeout=None)
         self.ticket_type = ticket_type
 
-        # Reden
         self.reason = discord.ui.TextInput(
             label="Reden van je ticket",
             placeholder="Beschrijf kort waarom je dit ticket opent...",
@@ -678,7 +642,6 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
         )
         self.add_item(self.reason)
 
-        # Extra info
         self.info = discord.ui.TextInput(
             label="Extra informatie",
             placeholder="Voeg extra details toe zodat staff je sneller kan helpen.",
@@ -696,13 +659,11 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
             await interaction.response.send_message("❌ Ticket categorie niet gevonden!", ephemeral=True)
             return
 
-        # Check of gebruiker al een ticket heeft
         for ch in category.channels:
             if ch.name == f"ticket-{interaction.user.id}":
                 await interaction.response.send_message(f"❌ Je hebt al een ticket: {ch.mention}", ephemeral=True)
                 return
 
-        # Permissies
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, embed_links=True),
@@ -712,25 +673,19 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
-        # Kanaalnaam = type + user
         channel_name = f"{self.ticket_type.lower().replace(' ', '-')}-{interaction.user.id}"
-
         ticket_channel = await category.create_text_channel(
             name=channel_name,
             overwrites=overwrites
         )
 
-        # Embed in ticket
         emb = discord.Embed(
             title=f"🎫 Ticket geopend - {self.ticket_type}",
             description=f"**Door:** {interaction.user.mention}\n\n**Reden:** {self.reason.value}\n\n**Extra info:** {self.info.value if self.info.value else 'Geen extra info'}",
             color=discord.Color.blurple()
         )
-
         await ticket_channel.send(content=f"{interaction.user.mention} Ticket aangemaakt!", embed=emb, view=CloseTicketView())
-
         await interaction.response.send_message(f"✅ Ticket aangemaakt: {ticket_channel.mention}", ephemeral=True)
-
 
 # ------------------- Dropdown Menu -------------------
 class TicketDropdown(discord.ui.Select):
@@ -752,13 +707,11 @@ class TicketDropdown(discord.ui.Select):
         ticket_type = self.values[0]
         await interaction.response.send_modal(TicketReasonModal(ticket_type))
 
-
 # ------------------- Dropdown View -------------------
 class TicketDropdownView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(TicketDropdown())
-
 
 # ------------------- Sluit-knop -------------------
 class CloseTicketView(discord.ui.View):
@@ -770,11 +723,9 @@ class CloseTicketView(discord.ui.View):
         if not any(r.id in TICKET_STAFF_ROLES for r in interaction.user.roles):
             await interaction.response.send_message("❌ Alleen staff kan tickets sluiten.", ephemeral=True)
             return
-
         await interaction.channel.delete()
 
-
-# ------------------- Setup Commando -------------------
+# ------------------- Ticket Setup Command -------------------
 @bot.tree.command(name="ticketsetup", description="Plaats ticket systeem in dit kanaal", guild=discord.Object(id=GUILD_ID))
 async def ticketsetup(interaction: discord.Interaction):
     if not has_allowed_role(interaction):
@@ -788,11 +739,10 @@ async def ticketsetup(interaction: discord.Interaction):
     )
     await interaction.channel.send(embed=emb, view=TicketDropdownView())
     await interaction.response.send_message("✅ Ticket systeem geplaatst!", ephemeral=True)
-# ------------------- Error handlers -------------------
-from discord.app_commands import AppCommandError
 
+# ------------------- Error Handlers -------------------
 @bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: AppCommandError):
+async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
     try:
         if interaction.response.is_done():
             await interaction.followup.send(f"❌ Er ging iets mis: `{error}`", ephemeral=True)
@@ -814,67 +764,9 @@ class SafeView(discord.ui.View):
             pass
         import traceback
         traceback.print_exception(type(error), error, error.__traceback__)
-# discord bot je weet weo refund
-
-// Bot setup
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-// Slash commands
-const commands = [
-  new SlashCommandBuilder()
-    .setName("refund")
-    .setDescription("Geef een speler een refund via FiveM")
-    .addStringOption(opt =>
-      opt.setName("playerid").setDescription("Player ID").setRequired(true)
-    )
-    .addIntegerOption(opt =>
-      opt.setName("amount").setDescription("Bedrag").setRequired(true)
-    ),
-];
-
-// Commands registreren
-const rest = new REST({ version: "10" }).setToken(TOKEN);
-(async () => {
-  try {
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-      body: commands,
-    });
-    console.log("✅ Slash commands geregistreerd.");
-  } catch (err) {
-    console.error(err);
-  }
-})();
-
-// Command handler
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) return;
-
-  if (interaction.commandName === "refund") {
-    const playerId = interaction.options.getString("playerid");
-    const amount = interaction.options.getInteger("amount");
-
-    try {
-      const res = await fetch(FIVEM_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId, amount }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        await interaction.reply(`✅ Refund van **${amount}** gegeven aan speler **${playerId}**.`);
-      } else {
-        await interaction.reply(`❌ Refund mislukt: ${data.error || "onbekende fout"}`);
-      }
-    } catch (err) {
-      console.error(err);
-      await interaction.reply("❌ Kon geen verbinding maken met FiveM API.");
-    }
-  }
-});
-
 
 # ------------------- Start Bot -------------------
+print("Booting up...")
 keep_alive()
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
