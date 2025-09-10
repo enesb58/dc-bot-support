@@ -13,7 +13,7 @@ from threading import Thread
 import re
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-const FIVEM_API = process.env.FIVEM_API || "http://localhost:30120/refund";
+const FIVEM_API = process.env.FIVEM_API || "http://94.130.130.24:3024/refund";
 
 # ------------------- Keep Alive Webserver -------------------
 app = Flask('')
