@@ -1,13 +1,17 @@
 import os
 import aiohttp
+import aiomysql
 from datetime import datetime, timezone
 import discord
 from discord.ext import commands
 from discord import app_commands
+from discord.app_commands import Choice
 from discord.ui import View, Button, Modal, TextInput, Select, UserSelect
 from discord import SelectOption
 from flask import Flask
 from threading import Thread
+
+pool = None
 
 # ------------------- Keep Alive Webserver -------------------
 app = Flask('')
@@ -65,6 +69,20 @@ async def on_ready():
         print(f"🌐 Slash commands gesynchroniseerd: {len(synced)}")
     except Exception as e:
         print(f"❌ Fout bij sync: {e}")
+
+    global pool
+    try:
+        pool = await aiomysql.create_pool(
+            host=os.getenv('panel.clutchnode.com'),
+            port=int(os.getenv('3306', '3306')),
+            user=os.getenv('u37_JqqRtfKVb6'),
+            password=os.getenv('vLnQfud^aC^WQF9BZMtqq0cX'),
+            db=os.getenv('s37_s37_s37_nrp2'),
+            autocommit=True
+        )
+        print("✅ Connected to MySQL database")
+    except Exception as e:
+        print(f"❌ Failed to connect to MySQL: {e}")
 
 # ------------------- Embed Modal -------------------
 class EmbedModal(Modal, title="Maak een Embed"):
@@ -603,13 +621,15 @@ async def clear(interaction: discord.Interaction, amount: str):
     except ValueError:
         await interaction.followup.send("❌ Ongeldig aantal, gebruik een getal of 'all'.", ephemeral=True)
 
-# ------------------- Refund Command -------------------
+# ------------------- Refund Command (Existing, with defer to prevent timeout) -------------------
 @bot.tree.command(name="refund", description="Geef een speler een refund via FiveM", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(player_id="Player ID", amount="Bedrag")
 async def refund(interaction: discord.Interaction, player_id: str, amount: int):
     if not has_allowed_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
         return
+
+    await interaction.response.defer()
 
     async with aiohttp.ClientSession() as session:
         try:
@@ -620,12 +640,92 @@ async def refund(interaction: discord.Interaction, player_id: str, amount: int):
             ) as response:
                 data = await response.json()
                 if data.get("success"):
-                    await interaction.response.send_message(f"✅ Refund van **{amount}** gegeven aan speler **{player_id}**.")
+                    await interaction.followup.send(f"✅ Refund van **{amount}** gegeven aan speler **{player_id}**.")
                 else:
-                    await interaction.response.send_message(f"❌ Refund mislukt: {data.get('error', 'onbekende fout')}")
+                    await interaction.followup.send(f"❌ Refund mislukt: {data.get('error', 'onbekende fout')}")
         except Exception as e:
-            await interaction.response.send_message("❌ Kon geen verbinding maken met FiveM API.", ephemeral=True)
+            await interaction.followup.send("❌ Kon geen verbinding maken met FiveM API.", ephemeral=True)
             print(f"Error in refund command: {e}")
+
+# ------------------- Add Refund Command (New, inserts directly into DB) -------------------
+@bot.tree.command(name="addrefund", description="Voeg een refund toe voor een gebruiker via Discord ID", guild=discord.Object(id=GUILD_ID))
+@app_commands.describe(
+    discord_id="Discord ID van de gebruiker",
+    refund_type="Type refund (item, weapon, money, black_money)",
+    item="Item naam (voor type item)",
+    amount="Aantal (voor item, money, black_money)",
+    weapon="Weapon naam (voor type weapon)",
+    ammo="Ammo (voor weapon, optioneel)"
+)
+@app_commands.choices(refund_type=[
+    Choice(name="Item", value="item"),
+    Choice(name="Weapon", value="weapon"),
+    Choice(name="Money", value="money"),
+    Choice(name="Black Money", value="black_money"),
+])
+async def addrefund(interaction: discord.Interaction, discord_id: str, refund_type: str, item: str = None, amount: int = None, weapon: str = None, ammo: int = None):
+    if not has_allowed_role(interaction):
+        await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    if pool is None:
+        await interaction.followup.send("❌ Geen verbinding met de database.", ephemeral=True)
+        return
+
+    # Validate input based on type
+    if refund_type not in ['item', 'weapon', 'money', 'black_money']:
+        await interaction.followup.send("❌ Ongeldig refund type.")
+        return
+
+    insert_item = None
+    insert_amount = None
+    insert_weapon = None
+    insert_ammo = None
+
+    if refund_type == 'item':
+        if not item or not amount:
+            await interaction.followup.send("❌ Item en amount vereist voor type 'item'.")
+            return
+        insert_item = item
+        insert_amount = amount
+    elif refund_type == 'weapon':
+        if not weapon:
+            await interaction.followup.send("❌ Weapon vereist voor type 'weapon'.")
+            return
+        insert_weapon = weapon
+        insert_ammo = ammo or 0
+    elif refund_type in ['money', 'black_money']:
+        if not amount:
+            await interaction.followup.send("❌ Amount vereist voor type 'money' of 'black_money'.")
+            return
+        insert_amount = amount
+        insert_ammo = 0  # Default to 0 for ammo in money types
+
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                    """,
+                    (discord_id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                )
+        description = f"{refund_type}"
+        if item:
+            description += f" {item}"
+        if weapon:
+            description += f" {weapon}"
+        if amount:
+            description += f" x{amount}"
+        if ammo:
+            description += f" (ammo: {ammo})"
+        await interaction.followup.send(f"✅ Refund toegevoegd voor <@{discord_id}>: {description}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Fout bij toevoegen van refund: {str(e)}", ephemeral=True)
+        print(f"Error adding refund: {e}")
 
 # ------------------- Ticket Modal -------------------
 class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
