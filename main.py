@@ -288,6 +288,24 @@ def make_action_dm(guild_name: str, actie: str, reden: str, moderator: str):
         f"Door: {moderator}\n"
         f"Tijd: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
     )
+def make_refund_dm(user: discord.User, moderator: discord.User, refund_type: str, item: str = None, amount: int = None, weapon: str = None, ammo: int = None):
+    message = f"🎉 **Refund Bevestigd**\n"
+    message += f"Je refund is bevestigd door {moderator.mention}, hieronder vind je de details.\n\n"
+    message += "**Refund Details**\n"
+    type_map = {'item': 'Item', 'weapon': 'Wapen', 'money': 'Geld', 'black_money': 'Zwart Geld'}
+    message += f"Type: {type_map.get(refund_type, refund_type)}\n"
+    if weapon:
+        message += f"Wapen: {weapon}\n"
+    if item:
+        message += f"Item: {item}\n"
+    if amount:
+        message += f"Aantal: {amount}\n"
+    if ammo:
+        message += f"Aantal: {ammo}\n"
+    message += "\n**Hoe claim je je refund**\n"
+    message += "Volg deze stappen om je refund te claimen:\n"
+    message += "1. Ga in-game\n2. Open het refundmenu met /refunds\n3. Claim je refund"
+    return message
 # ------------------- Moderatie Modal -------------------
 class ModeratieModal(Modal, title="Reden"):
     reden = TextInput(label="Reden", style=discord.TextStyle.paragraph, placeholder="Geef een reden", required=True)
@@ -558,7 +576,7 @@ def build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo)
         embed.add_field(name="Aantal", value=str(amount))
     if ammo:
         embed.add_field(name="Aantal", value=str(ammo))  # or "Ammo"
-    embed.add_field(name="Hoe claim je je refund", value="1. Ga in-game\n2. Open het refund menu met /refunds\n3. Claim je refund")
+    embed.add_field(name="Hoe claim je je refund", value="1. Ga in-game\n2. Open het refundmenu met /refunds\n3. Claim je refund")
     return embed
 # ------------------- Add Refund Command -------------------
 @bot.tree.command(name="addrefund", description="Voeg een refund toe voor een gebruiker", guild=discord.Object(id=GUILD_ID))
@@ -619,35 +637,50 @@ async def addrefund(interaction: discord.Interaction, user: discord.User, refund
         description += f" x{amount}"
     if ammo:
         description += f" (ammo: {ammo})"
+    
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=300.0)
+            self.add_item(Button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm"))
+            self.add_item(Button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel"))
+
+        async def on_timeout(self):
+            await interaction.edit_original_response(content="⏰ Tijd om te bevestigen is verlopen.", view=None)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm")
+        async def confirm_callback(self, button_interaction: discord.Interaction, button: Button):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                # Send notification embed to the channel
+                embed = build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo)
+                await interaction.channel.send(embed=embed)
+                # Send DM to the user
+                dm_message = make_refund_dm(user, interaction.user, refund_type, item, amount, weapon, ammo)
+                await try_send_dm(user, dm_message)
+                # Log
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                await button_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
+            except Exception as e:
+                await button_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel")
+        async def cancel_callback(self, button_interaction: discord.Interaction, button: Button):
+            await button_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
+
+    await interaction.followup.send(f"**Bevestiging**\nWeet je zeker dat je onderstaande refund aan {user.mention} wilt geven?\n\n**Refund Details**\nIs dit de refund die je aan {user.mention} wilt geven?\nType: {type_map.get(refund_type, refund_type)}\nWapen: {weapon if weapon else 'N/A'}\nAantal: {amount if amount else 'N/A'}", view=ConfirmationView(), ephemeral=True)
+
 # ------------------- Refund Annuleer Command -------------------
 @bot.tree.command(name="refund_annuleer", description="Annuleer een refund via ID", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(refund_id="Refund ID")
@@ -738,34 +771,47 @@ async def refund_geef_geld(interaction: discord.Interaction, user: discord.User,
     insert_ammo = 0
     description = f"Geld x{amount}"
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=300.0)
+            self.add_item(Button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm"))
+            self.add_item(Button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel"))
+
+        async def on_timeout(self):
+            await interaction.edit_original_response(content="⏰ Tijd om te bevestigen is verlopen.", view=None)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm")
+        async def confirm_callback(self, button_interaction: discord.Interaction, button: Button):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                # Send notification embed to the channel
+                embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await interaction.channel.send(embed=embed)
+                # Send DM to the user
+                dm_message = make_refund_dm(user, interaction.user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await try_send_dm(user, dm_message)
+                # Log
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                await button_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
+            except Exception as e:
+                await button_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel")
+        async def cancel_callback(self, button_interaction: discord.Interaction, button: Button):
+            await button_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
+
+    await interaction.followup.send(f"**Bevestiging**\nWeet je zeker dat je onderstaande refund aan {user.mention} wilt geven?\n\n**Refund Details**\nIs dit de refund die je aan {user.mention} wilt geven?\nType: {type_map.get(refund_type, refund_type)}\nAantal: {amount}", view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Item Command -------------------
 @bot.tree.command(name="refund_geef_item", description="Geef een refund voor een item", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", item="Item naam", amount="Aantal")
@@ -781,34 +827,47 @@ async def refund_geef_item(interaction: discord.Interaction, user: discord.User,
     insert_ammo = 0
     description = f"Item {item} x{amount}"
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=300.0)
+            self.add_item(Button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm"))
+            self.add_item(Button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel"))
+
+        async def on_timeout(self):
+            await interaction.edit_original_response(content="⏰ Tijd om te bevestigen is verlopen.", view=None)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm")
+        async def confirm_callback(self, button_interaction: discord.Interaction, button: Button):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                # Send notification embed to the channel
+                embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await interaction.channel.send(embed=embed)
+                # Send DM to the user
+                dm_message = make_refund_dm(user, interaction.user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await try_send_dm(user, dm_message)
+                # Log
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                await button_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
+            except Exception as e:
+                await button_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel")
+        async def cancel_callback(self, button_interaction: discord.Interaction, button: Button):
+            await button_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
+
+    await interaction.followup.send(f"**Bevestiging**\nWeet je zeker dat je onderstaande refund aan {user.mention} wilt geven?\n\n**Refund Details**\nIs dit de refund die je aan {user.mention} wilt geven?\nType: {type_map.get(refund_type, refund_type)}\nItem: {item}\nAantal: {amount}", view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Wapen Command -------------------
 @bot.tree.command(name="refund_geef_wapen", description="Geef een refund voor een wapen", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", weapon="Weapon naam", ammo="Ammo (optioneel)")
@@ -824,34 +883,47 @@ async def refund_geef_wapen(interaction: discord.Interaction, user: discord.User
     insert_amount = None
     description = f"Wapen {weapon} (ammo: {ammo})"
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=300.0)
+            self.add_item(Button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm"))
+            self.add_item(Button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel"))
+
+        async def on_timeout(self):
+            await interaction.edit_original_response(content="⏰ Tijd om te bevestigen is verlopen.", view=None)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm")
+        async def confirm_callback(self, button_interaction: discord.Interaction, button: Button):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                # Send notification embed to the channel
+                embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await interaction.channel.send(embed=embed)
+                # Send DM to the user
+                dm_message = make_refund_dm(user, interaction.user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await try_send_dm(user, dm_message)
+                # Log
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                await button_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
+            except Exception as e:
+                await button_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel")
+        async def cancel_callback(self, button_interaction: discord.Interaction, button: Button):
+            await button_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
+
+    await interaction.followup.send(f"**Bevestiging**\nWeet je zeker dat je onderstaande refund aan {user.mention} wilt geven?\n\n**Refund Details**\nIs dit de refund die je aan {user.mention} wilt geven?\nType: {type_map.get(refund_type, refund_type)}\nWapen: {weapon}\nAantal: {ammo}", view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Zwartgeld Command -------------------
 @bot.tree.command(name="refund_geef_zwartgeld", description="Geef een refund in zwart geld", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", amount="Bedrag")
@@ -867,34 +939,47 @@ async def refund_geef_zwartgeld(interaction: discord.Interaction, user: discord.
     insert_ammo = 0
     description = f"Zwart Geld x{amount}"
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=300.0)
+            self.add_item(Button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm"))
+            self.add_item(Button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel"))
+
+        async def on_timeout(self):
+            await interaction.edit_original_response(content="⏰ Tijd om te bevestigen is verlopen.", view=None)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.green, custom_id="confirm")
+        async def confirm_callback(self, button_interaction: discord.Interaction, button: Button):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                # Send notification embed to the channel
+                embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await interaction.channel.send(embed=embed)
+                # Send DM to the user
+                dm_message = make_refund_dm(user, interaction.user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                await try_send_dm(user, dm_message)
+                # Log
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                await button_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
+            except Exception as e:
+                await button_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.red, custom_id="cancel")
+        async def cancel_callback(self, button_interaction: discord.Interaction, button: Button):
+            await button_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
+
+    await interaction.followup.send(f"**Bevestiging**\nWeet je zeker dat je onderstaande refund aan {user.mention} wilt geven?\n\n**Refund Details**\nIs dit de refund die je aan {user.mention} wilt geven?\nType: {type_map.get(refund_type, refund_type)}\nAantal: {amount}", view=ConfirmationView(), ephemeral=True)
 # ------------------- Ticket Modal -------------------
 class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
     def __init__(self, ticket_type: str):
@@ -920,106 +1005,4 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
         guild = interaction.guild
         category = guild.get_channel(TICKET_CATEGORY_ID)
         if not category or not isinstance(category, discord.CategoryChannel):
-            await interaction.response.send_message("❌ Ticket categorie niet gevonden!", ephemeral=True)
-            return
-        for ch in category.channels:
-            if ch.name == f"ticket-{interaction.user.id}":
-                await interaction.response.send_message(f"❌ Je hebt al een ticket: {ch.mention}", ephemeral=True)
-                return
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, embed_links=True),
-        }
-        for rid in TICKET_STAFF_ROLES:
-            role = guild.get_role(rid)
-            if role:
-                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
-        channel_name = f"{self.ticket_type.lower().replace(' ', '-')}-{interaction.user.id}"
-        ticket_channel = await category.create_text_channel(
-            name=channel_name,
-            overwrites=overwrites
-        )
-        emb = discord.Embed(
-            title=f"🎫 Ticket geopend - {self.ticket_type}",
-            description=f"Door: {interaction.user.mention}\n\nReden: {self.reason.value}\n\nExtra info: {self.info.value if self.info.value else 'Geen extra info'}",
-            color=discord.Color.blurple()
-        )
-        await ticket_channel.send(content=f"{interaction.user.mention} Ticket aangemaakt!", embed=emb, view=CloseTicketView())
-        await interaction.response.send_message(f"✅ Ticket aangemaakt: {ticket_channel.mention}", ephemeral=True)
-# ------------------- Dropdown Menu -------------------
-class TicketDropdown(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Algemene Vragen", emoji="❓"),
-            discord.SelectOption(label="Klachten (Spelers)", emoji="👤"),
-            discord.SelectOption(label="Klachten (Staff)", emoji="🛑"),
-            discord.SelectOption(label="Ingame Refund", emoji="💰"),
-            discord.SelectOption(label="Unban Aanvraag (Discord)", emoji="💬"),
-            discord.SelectOption(label="Unban Aanvraag (TX-Admin)", emoji="🖥️"),
-            discord.SelectOption(label="Unban Aanvraag (Anticheat)", emoji="⚠️"),
-            discord.SelectOption(label="Staff Sollicitatie", emoji="📝"),
-            discord.SelectOption(label="Donaties", emoji="💎"),
-        ]
-        super().__init__(placeholder="📌 Kies een ticket type...", min_values=1, max_values=1, options=options)
-    async def callback(self, interaction: discord.Interaction):
-        ticket_type = self.values[0]
-        await interaction.response.send_modal(TicketReasonModal(ticket_type))
-# ------------------- Dropdown View -------------------
-class TicketDropdownView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketDropdown())
-# ------------------- Sluit-knop -------------------
-class CloseTicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-    @discord.ui.button(label="❌ Sluit ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket")
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not any(r.id in TICKET_STAFF_ROLES for r in interaction.user.roles):
-            await interaction.response.send_message("❌ Alleen staff kan tickets sluiten.", ephemeral=True)
-            return
-        await interaction.channel.delete()
-# ------------------- Ticket Setup Command -------------------
-@bot.tree.command(name="ticketsetup", description="Plaats ticket systeem in dit kanaal", guild=discord.Object(id=GUILD_ID))
-async def ticketsetup(interaction: discord.Interaction):
-    if not has_allowed_role(interaction):
-        await interaction.response.send_message("❌ Geen permissie.", ephemeral=True)
-        return
-    emb = discord.Embed(
-        title="🎫 Tickets",
-        description="Selecteer hieronder het type ticket dat je wilt openen.",
-        color=discord.Color.blurple()
-    )
-    await interaction.channel.send(embed=emb, view=TicketDropdownView())
-    await interaction.response.send_message("✅ Ticket systeem geplaatst!", ephemeral=True)
-# ------------------- Error Handlers -------------------
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send(f"❌ Er ging iets mis: {error}", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"❌ Er ging iets mis: {error}", ephemeral=True)
-    except:
-        pass
-    import traceback
-    traceback.print_exception(type(error), error, error.traceback)
-class SafeView(discord.ui.View):
-    async def on_error(self, error: Exception, item: discord.ui.Item, interaction: discord.Interaction):
-        try:
-            if interaction.response.is_done():
-                await interaction.followup.send("❌ Fout bij uitvoeren van deze knop/select.", ephemeral=True)
-            else:
-                await interaction.response.send_message("❌ Fout bij uitvoeren van deze knop/select.", ephemeral=True)
-        except:
-            pass
-        import traceback
-        traceback.print_exception(type(error), error, error.traceback)
-# ------------------- Start Bot -------------------
-print("Booting up...")
-keep_alive()
-TOKEN = os.getenv("DISCORD_TOKEN")
-if not TOKEN:
-    print("❌ Geen Discord TOKEN gevonden in environment variables!")
-else:
-    bot.run(TOKEN)
+            await interaction
