@@ -73,11 +73,11 @@ async def on_ready():
     global pool
     try:
         pool = await aiomysql.create_pool(
-            host=os.getenv('panel.clutchnode.com'),
-            port=int(os.getenv('3306', '3306')),
-            user=os.getenv('u37_JqqRtfKVb6'),
-            password=os.getenv('vLnQfud^aC^WQF9BZMtqq0cX'),
-            db=os.getenv('s37_s37_s37_nrp2'),
+            host=os.getenv('DB_HOST'),
+            port=int(os.getenv('DB_PORT', '3306')),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASS'),
+            db=os.getenv('DB_NAME'),
             autocommit=True
         )
         print("✅ Connected to MySQL database")
@@ -621,7 +621,7 @@ async def clear(interaction: discord.Interaction, amount: str):
     except ValueError:
         await interaction.followup.send("❌ Ongeldig aantal, gebruik een getal of 'all'.", ephemeral=True)
 
-# ------------------- Refund Command (Existing, with defer to prevent timeout) -------------------
+# ------------------- Refund Command -------------------
 @bot.tree.command(name="refund", description="Geef een speler een refund via FiveM", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(player_id="Player ID", amount="Bedrag")
 async def refund(interaction: discord.Interaction, player_id: str, amount: int):
@@ -642,12 +642,12 @@ async def refund(interaction: discord.Interaction, player_id: str, amount: int):
                 if data.get("success"):
                     await interaction.followup.send(f"✅ Refund van **{amount}** gegeven aan speler **{player_id}**.")
                 else:
-                    await interaction.followup.send(f"❌ Refund mislukt: {data.get('error', 'onbekende fout')}")
+                    await interaction.followup.send(f"❌ Refund mislukt: {data.get('error', 'onbekende fout')}", ephemeral=True)
         except Exception as e:
             await interaction.followup.send("❌ Kon geen verbinding maken met FiveM API.", ephemeral=True)
             print(f"Error in refund command: {e}")
 
-# ------------------- Add Refund Command (New, inserts directly into DB) -------------------
+# ------------------- Add Refund Command -------------------
 @bot.tree.command(name="addrefund", description="Voeg een refund toe voor een gebruiker via Discord ID", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     discord_id="Discord ID van de gebruiker",
@@ -676,7 +676,7 @@ async def addrefund(interaction: discord.Interaction, discord_id: str, refund_ty
 
     # Validate input based on type
     if refund_type not in ['item', 'weapon', 'money', 'black_money']:
-        await interaction.followup.send("❌ Ongeldig refund type.")
+        await interaction.followup.send("❌ Ongeldig refund type.", ephemeral=True)
         return
 
     insert_item = None
@@ -686,19 +686,19 @@ async def addrefund(interaction: discord.Interaction, discord_id: str, refund_ty
 
     if refund_type == 'item':
         if not item or not amount:
-            await interaction.followup.send("❌ Item en amount vereist voor type 'item'.")
+            await interaction.followup.send("❌ Item en amount vereist voor type 'item'.", ephemeral=True)
             return
         insert_item = item
         insert_amount = amount
     elif refund_type == 'weapon':
         if not weapon:
-            await interaction.followup.send("❌ Weapon vereist voor type 'weapon'.")
+            await interaction.followup.send("❌ Weapon vereist voor type 'weapon'.", ephemeral=True)
             return
         insert_weapon = weapon
         insert_ammo = ammo or 0
     elif refund_type in ['money', 'black_money']:
         if not amount:
-            await interaction.followup.send("❌ Amount vereist voor type 'money' of 'black_money'.")
+            await interaction.followup.send("❌ Amount vereist voor type 'money' of 'black_money'.", ephemeral=True)
             return
         insert_amount = amount
         insert_ammo = 0  # Default to 0 for ammo in money types
@@ -708,10 +708,10 @@ async def addrefund(interaction: discord.Interaction, discord_id: str, refund_ty
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                    INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s)
                     """,
-                    (discord_id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                    (discord_id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo, datetime.now(timezone.utc))
                 )
         description = f"{refund_type}"
         if item:
