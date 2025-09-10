@@ -41,7 +41,7 @@ TICKET_CATEGORY_ID = 1409228873438199989
 TICKET_STAFF_ROLES = {1409557291329392744}
 TICKET_LOG_CHANNEL_ID = 1409557293283934247
 REFUND_ROLE_ID = 1414363765272477818
-REFUND_LOG_CHANNEL_ID = 1409557293283934247  # Assume same as other logs
+REFUND_LOG_CHANNEL_ID = 1415401929106002061  # Assume same as other logs
 # ------------------- Bot -------------------
 intents = discord.Intents.default()
 intents.message_content = True
