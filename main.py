@@ -48,8 +48,18 @@ intents.message_content = True
 intents.reactions = True
 intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
-bot.role_embed_data = {}  # Storage for role embeds
+bot.role_embed_data = {}  # Storage 
+for role embeds
 # ------------------- Database Helpers -------------------
+async def fetch_items(current_input: str):
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT name FROM ld_items WHERE name LIKE %s LIMIT 25", (f"%{current_input}%",))
+            items = await cur.fetchall()
+            return [app_commands.Choice(name=item[0], value=item[0]) for item in items]
+
 async def get_refunds(discord_id):
     if pool is None:
         return []
@@ -59,7 +69,8 @@ async def get_refunds(discord_id):
             return await cur.fetchall()
 async def get_refund(refund_id):
     if pool is None:
-        return None
+        
+return None
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT * FROM ld_refunds WHERE id = %s", (refund_id,))
@@ -70,7 +81,8 @@ async def get_refund(refund_id):
 async def on_ready():
     print(f"✅ Bot ingelogd als {bot.user}")
     try:
-        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        synced 
+= await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f"🌐 Slash commands gesynchroniseerd: {len(synced)}")
     except Exception as e:
         print(f"❌ Fout bij sync: {e}")
@@ -80,7 +92,8 @@ async def on_ready():
             host=os.getenv('DB_HOST'),
             port=int(os.getenv('DB_PORT', '3306')),
             user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASS'),
+          
+  password=os.getenv('DB_PASS'),
             db=os.getenv('DB_NAME'),
             autocommit=True
         )
@@ -89,7 +102,8 @@ async def on_ready():
         print(f"❌ Failed to connect to MySQL: {e}")
 # ------------------- Embed Modal -------------------
 class EmbedModal(Modal, title="Maak een Embed"):
-    titel = TextInput(label="Titel", style=discord.TextStyle.short, placeholder="Bijv. Mededeling", required=True, max_length=100)
+    titel = TextInput(label="Titel", style=discord.TextStyle.short, placeholder="Bijv.
+Mededeling", required=True, max_length=100)
     beschrijving = TextInput(label="Beschrijving", style=discord.TextStyle.paragraph, placeholder="Tekst die in de embed verschijnt", required=True, max_length=2000)
     kleur = TextInput(label="Kleur (hex of none)", style=discord.TextStyle.short, placeholder="#2ecc71", required=False, max_length=10)
     async def on_submit(self, interaction: discord.Interaction):
@@ -98,26 +112,30 @@ class EmbedModal(Modal, title="Maak een Embed"):
             color = discord.Color.default()
         else:
             try:
-                color = discord.Color(int(kleur_input.strip("#"), 16))
+     
+           color = discord.Color(int(kleur_input.strip("#"), 16))
             except:
                 color = discord.Color.default()
         embed = discord.Embed(title=self.titel.value, description=self.beschrijving.value, color=color)
         embed.set_footer(text=f"Gemaakt door {interaction.user}")
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message("Kon guild niet vinden.", ephemeral=True)
+            await 
+interaction.response.send_message("Kon guild niet vinden.", ephemeral=True)
             return
         options = [SelectOption(label=ch.name, value=str(ch.id)) for ch in guild.text_channels[:25]]
         class ChannelSelect(View):
             @discord.ui.select(placeholder="Kies een kanaal", options=options)
             async def select_callback(self, select_interaction: discord.Interaction, select: Select):
                 kanaal_id = int(select.values[0])
-                kanaal = guild.get_channel(kanaal_id)
+         
+       kanaal = guild.get_channel(kanaal_id)
                 if kanaal is None:
                     await select_interaction.response.edit_message(content="Kanaal niet gevonden.", view=None)
                     return
                 await kanaal.send(embed=embed)
-                await select_interaction.response.edit_message(content=f"✅ Embed gestuurd naar {kanaal.mention}", view=None)
+           
+     await select_interaction.response.edit_message(content=f"✅ Embed gestuurd naar {kanaal.mention}", view=None)
         await interaction.response.send_message("Kies een kanaal voor je embed:", view=ChannelSelect(), ephemeral=True)
 @bot.tree.command(name="embed", description="Maak een embed via formulier", guild=discord.Object(id=GUILD_ID))
 async def embed_cmd(interaction: discord.Interaction):
@@ -128,9 +146,11 @@ async def embed_cmd(interaction: discord.Interaction):
     await interaction.response.send_modal(EmbedModal())
 # ------------------- Role Embed Modal -------------------
 class RoleEmbedModal(Modal, title="Maak een Role Embed"):
-    titel = TextInput(
+    titel = 
+TextInput(
         label="Titel", style=discord.TextStyle.short,
-        placeholder="Bijv. Kies je rol", required=True, max_length=100
+        placeholder="Bijv.
+Kies je rol", required=True, max_length=100
     )
     beschrijving = TextInput(
         label="Beschrijving (embed tekst)", style=discord.TextStyle.paragraph,
@@ -142,7 +162,8 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
     )
     thumbnail = TextInput(
         label="Thumbnail (URL of 'serverlogo')", style=discord.TextStyle.short,
-        placeholder="https://example.com/thumb.png of 'serverlogo'", required=False, max_length=200
+    
+    placeholder="https://example.com/thumb.png of 'serverlogo'", required=False, max_length=200
     )
     kleur = TextInput(
         label="Kleur (hex of none)", style=discord.TextStyle.short,
@@ -153,14 +174,16 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
         if kleur_input.lower() == "none":
             color = discord.Color.default()
         else:
-            try:
+   
+         try:
                 color = discord.Color(int(kleur_input.strip("#"), 16))
             except:
                 color = discord.Color.default()
         embed = discord.Embed(title=self.titel.value, description=self.beschrijving.value, color=color)
         if self.thumbnail.value:
             if self.thumbnail.value.lower() == "serverlogo" and interaction.guild.icon:
-                embed.set_thumbnail(url=interaction.guild.icon.url)
+    
+            embed.set_thumbnail(url=interaction.guild.icon.url)
             else:
                 embed.set_thumbnail(url=self.thumbnail.value)
         elif interaction.guild.icon:
@@ -168,18 +191,21 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
         if interaction.guild.icon:
             embed.set_footer(text=f"Gemaakt door {interaction.guild.name}", icon_url=interaction.guild.icon.url)
         else:
-            embed.set_footer(text=f"Gemaakt door {interaction.guild.name}")
+       
+     embed.set_footer(text=f"Gemaakt door {interaction.guild.name}")
         raw_map = {}
         for part in self.mapping.value.split(","):
             if ":" in part:
                 emoji_text, role_part = part.split(":", 1)
                 emoji_text = emoji_text.strip()
                 role_part = role_part.strip()
-                if emoji_text and role_part:
+ 
+               if emoji_text and role_part:
                     raw_map[emoji_text] = role_part
         if not raw_map:
             await interaction.response.send_message(
-                "Geen geldige mapping gevonden. Gebruik format emoji:role_id of emoji:RoleName",
+                "Geen geldige mapping gevonden.
+Gebruik format emoji:role_id of emoji:RoleName",
                 ephemeral=True
             )
             return
@@ -187,49 +213,60 @@ class RoleEmbedModal(Modal, title="Maak een Role Embed"):
         if guild is None:
             await interaction.response.send_message("Kon guild niet vinden.", ephemeral=True)
             return
-        options = [SelectOption(label=ch.name, value=str(ch.id)) for ch in guild.text_channels[:25]]
+      
+  options = [SelectOption(label=ch.name, value=str(ch.id)) for ch in guild.text_channels[:25]]
         class ChannelSelect(View):
             @discord.ui.select(placeholder="Kies een kanaal", options=options)
             async def select_callback(self, select_interaction: discord.Interaction, select: Select):
                 kanaal_id = int(select.values[0])
                 kanaal = guild.get_channel(kanaal_id)
-                if kanaal is None:
+             
+   if kanaal is None:
                     await select_interaction.response.edit_message(content="Kanaal niet gevonden.", view=None)
                     return
                 message = await kanaal.send(embed=embed)
                 normalized_map = {}
-                for emoji_text, role_part in raw_map.items():
+             
+   for emoji_text, role_part in raw_map.items():
                     role_id = None
                     if role_part.isdigit():
                         try:
-                            role_id = int(role_part)
+                          
+  role_id = int(role_part)
                             role_obj = guild.get_role(role_id)
                             if role_obj is None:
                                 try:
-                                    role_obj = await guild.fetch_role(role_id)
+   
+                                 role_obj = await guild.fetch_role(role_id)
                                 except:
-                                    role_obj = None
+                                
+    role_obj = None
                             if role_obj is None:
                                 role_id = None
                         except:
-                            role_id = None
+     
+                       role_id = None
                     else:
                         role_obj = discord.utils.get(guild.roles, name=role_part)
                         if role_obj:
-                            role_id = role_obj.id
+   
+                         role_id = role_obj.id
                     try:
                         await message.add_reaction(emoji_text)
                         if role_id:
-                            normalized_map[str(emoji_text)] = role_id
+   
+                         normalized_map[str(emoji_text)] = role_id
                     except Exception as e:
                         print(f"Kon emoji niet toevoegen ({emoji_text}): {e}")
                 bot.role_embed_data = getattr(bot, "role_embed_data", {})
-                bot.role_embed_data[message.id] = normalized_map
+ 
+               bot.role_embed_data[message.id] = normalized_map
                 await select_interaction.response.edit_message(
                     content=f"✅ Role embed gestuurd naar {kanaal.mention}\nOpgeslagen mappings: {len(normalized_map)}",
                     view=None
                 )
-        await interaction.response.send_message("Kies een kanaal voor je role embed:", view=ChannelSelect(), ephemeral=True)
+   
+     await interaction.response.send_message("Kies een kanaal voor je role embed:", view=ChannelSelect(), ephemeral=True)
 @bot.tree.command(
     name="roleembed",
     description="Maak een role embed (alleen bepaalde rollen mogen dit)",
@@ -243,7 +280,8 @@ async def roleembed(interaction: discord.Interaction):
     await interaction.response.send_modal(RoleEmbedModal())
 # ------------------- Reaction -> Roles -------------------
 async def handle_reaction(payload: discord.RawReactionActionEvent, add=True):
-    emoji_map = getattr(bot, "role_embed_data", {}).get(payload.message_id)
+    emoji_map = 
+getattr(bot, "role_embed_data", {}).get(payload.message_id)
     if not emoji_map:
         return
     guild = bot.get_guild(payload.guild_id)
@@ -256,7 +294,8 @@ async def handle_reaction(payload: discord.RawReactionActionEvent, add=True):
         except:
             return
     if member.bot:
-        return
+  
+      return
     role_id = emoji_map.get(str(payload.emoji))
     if role_id:
         role = guild.get_role(role_id)
@@ -264,7 +303,8 @@ async def handle_reaction(payload: discord.RawReactionActionEvent, add=True):
             try:
                 if add:
                     await member.add_roles(role)
-                else:
+              
+  else:
                     await member.remove_roles(role)
             except Exception as e:
                 print(f"Kon rol niet {'toevoegen' if add else 'verwijderen'}: {e}")
@@ -275,9 +315,9 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     await handle_reaction(payload, add=False)
 # ------------------- Helpers -------------------
-async def try_send_dm(user: discord.abc.Messageable, content: str):
+async def try_send_dm(user: discord.abc.Messageable, content: str = None, embed: discord.Embed = None):
     try:
-        await user.send(content)
+        await user.send(content=content, embed=embed)
         return True
     except Exception:
         return False
@@ -291,7 +331,8 @@ def make_action_dm(guild_name: str, actie: str, reden: str, moderator: str):
 # ------------------- Moderatie Modal -------------------
 class ModeratieModal(Modal, title="Reden"):
     reden = TextInput(label="Reden", style=discord.TextStyle.paragraph, placeholder="Geef een reden", required=True)
-    def __init__(self, view_ref):
+ 
+   def __init__(self, view_ref):
         super().__init__()
         self.view_ref = view_ref
     async def on_submit(self, interaction: discord.Interaction):
@@ -301,48 +342,59 @@ class ModeratieModal(Modal, title="Reden"):
         moderator = interaction.user
         try:
             if action in {"ban", "kick", "warn"}:
-                member: discord.Member = view.target_member
+    
+            member: discord.Member = view.target_member
                 if member is None:
                     await interaction.response.send_message("❌ Geen doelwit geselecteerd.", ephemeral=True)
                     return
                 me = guild.me
-                if action == "ban" and not me.guild_permissions.ban_members:
+   
+             if action == "ban" and not me.guild_permissions.ban_members:
                     await interaction.response.send_message("❌ Bot mist 'Ban Members' permissie.", ephemeral=True)
                     return
                 if action == "kick" and not me.guild_permissions.kick_members:
-                    await interaction.response.send_message("❌ Bot mist 'Kick Members' permissie.", ephemeral=True)
+            
+        await interaction.response.send_message("❌ Bot mist 'Kick Members' permissie.", ephemeral=True)
                     return
                 if member == me:
                     await interaction.response.send_message("❌ Kan de bot niet modereren.", ephemeral=True)
-                    return
+                   
+ return
                 if member.top_role >= me.top_role:
                     await interaction.response.send_message("❌ Kan deze gebruiker niet modereren: hogere of gelijke rol dan de bot.", ephemeral=True)
                     return
-                dm_text = make_action_dm(guild.name if guild else "de server", action.upper(), self.reden.value, moderator.mention)
-                dm_ok = await try_send_dm(member, dm_text)
+                dm_text = make_action_dm(guild.name if guild else "de server", action.upper(), self.reden.value, 
+moderator.mention)
+                dm_ok = await try_send_dm(member, content=dm_text)
                 if action == "ban":
                     await member.ban(reason=self.reden.value)
                 elif action == "kick":
-                    await member.kick(reason=self.reden.value)
+                    await 
+member.kick(reason=self.reden.value)
                 elif action == "warn":
                     pass  # Placeholder for persistent warn store
                 log_id = LOG_CHANNELS.get(action)
                 if log_id:
-                    log_chan = guild.get_channel(log_id)
+                   
+ log_chan = guild.get_channel(log_id)
                     if log_chan:
                         emb = discord.Embed(
                             title=f"{action.capitalize()} uitgevoerd",
-                            description=(
+                     
+       description=(
                                 f"Gebruiker: {member} ({member.id})\n"
                                 f"Reden: {self.reden.value}\n"
-                                f"Door: {moderator.mention}\n"
+                          
+      f"Door: {moderator.mention}\n"
                                 f"DM verzonden: {'Ja' if dm_ok else 'Nee'}"
                             ),
-                            color=discord.Color.red(),
+                           
+ color=discord.Color.red(),
                             timestamp=datetime.now(timezone.utc),
                         )
                         await log_chan.send(embed=emb)
-                await interaction.response.send_message(f"✅ Actie {action} uitgevoerd op {member}.", ephemeral=True)
+                await interaction.response.send_message(f"✅ Actie {action} uitgevoerd op 
+{member}.", ephemeral=True)
             else:
                 await interaction.response.send_message("❌ Ongeldige actie.", ephemeral=True)
         except discord.Forbidden:
@@ -350,8 +402,10 @@ class ModeratieModal(Modal, title="Reden"):
         except Exception as exc:
             await interaction.response.send_message(f"❌ Fout bij uitvoeren: {exc}", ephemeral=True)
 # ------------------- Unban Modal -------------------
-class UnbanModal(Modal, title="Unban gebruiker (ID)"):
-    user_id = TextInput(label="User ID", style=discord.TextStyle.short, placeholder="Bijv. 123456789012345678", required=True)
+class 
+UnbanModal(Modal, title="Unban gebruiker (ID)"):
+    user_id = TextInput(label="User ID", style=discord.TextStyle.short, placeholder="Bijv.
+123456789012345678", required=True)
     reden = TextInput(label="Reden (optioneel)", style=discord.TextStyle.paragraph, placeholder="Reden (optioneel)", required=False)
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -360,7 +414,8 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message("❌ Guild niet gevonden.", ephemeral=True)
             return
         if not guild.me.guild_permissions.ban_members:
-            await interaction.response.send_message("❌ Bot mist 'Ban Members' permissie (nodig voor unban).", ephemeral=True)
+          
+  await interaction.response.send_message("❌ Bot mist 'Ban Members' permissie (nodig voor unban).", ephemeral=True)
             return
         try:
             uid = int(self.user_id.value.strip())
@@ -368,13 +423,15 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message("❌ Ongeldige User ID.", ephemeral=True)
             return
         reason_text = self.reden.value or "Geen reden opgegeven"
-        try:
+  
+      try:
             bans = await guild.bans()
         except TypeError:
             bans = [b async for b in guild.bans()]
         ban_entry = next((b for b in bans if b.user.id == uid), None)
         if ban_entry is None:
-            await interaction.response.send_message("❌ Deze user ID is niet geband (of niet gevonden).", ephemeral=True)
+            await interaction.response.send_message("❌ Deze user ID is niet geband (of 
+niet gevonden).", ephemeral=True)
             return
         try:
             await guild.unban(ban_entry.user, reason=reason_text)
@@ -382,24 +439,28 @@ class UnbanModal(Modal, title="Unban gebruiker (ID)"):
             await interaction.response.send_message("❌ Bot heeft geen permissie om te unbannen.", ephemeral=True)
             return
         except Exception as e:
-            await interaction.response.send_message(f"❌ Unban faalde: {e}", ephemeral=True)
+           
+ await interaction.response.send_message(f"❌ Unban faalde: {e}", ephemeral=True)
             return
         dm_text = make_action_dm(guild.name, "UNBAN", reason_text, moderator.mention)
-        try_send = await try_send_dm(ban_entry.user, dm_text)
+        try_send = await try_send_dm(ban_entry.user, content=dm_text)
         log_id = LOG_CHANNELS.get("unban")
         if log_id:
             log_channel = guild.get_channel(log_id)
             if log_channel:
-                emb = discord.Embed(
+           
+     emb = discord.Embed(
                     title="Unban uitgevoerd",
                     description=(
                         f"Gebruiker: {ban_entry.user} ({ban_entry.user.id})\n"
                         f"Reden: {reason_text}\n"
-                        f"Door: {moderator.mention}\n"
+ 
+                       f"Door: {moderator.mention}\n"
                         f"DM verzonden: {'Ja' if try_send else 'Nee'}"
                     ),
                     color=discord.Color.green(),
-                    timestamp=datetime.now(timezone.utc),
+      
+              timestamp=datetime.now(timezone.utc),
                 )
                 await log_channel.send(embed=emb)
         await interaction.response.send_message(f"✅ Unbanned: {ban_entry.user} ({ban_entry.user.id})", ephemeral=True)
@@ -408,9 +469,12 @@ class ModeratieView(View):
     def __init__(self, author: discord.Member):
         super().__init__(timeout=900.0)
         self.author = author
-        self.target_member: discord.Member | None = None
-        self.actie: str | None = None
-        self.reden: str | None = None
+        self.target_member: discord.Member 
+| None = None
+        self.actie: str |
+None = None
+        self.reden: str |
+None = None
         user_select = UserSelect(placeholder="Kies een gebruiker", min_values=1, max_values=1)
         user_select.callback = self._user_selected
         self.add_item(user_select)
@@ -418,7 +482,8 @@ class ModeratieView(View):
             ("Ban", discord.ButtonStyle.danger, "ban"),
             ("Kick", discord.ButtonStyle.primary, "kick"),
             ("Warn", discord.ButtonStyle.secondary, "warn"),
-            ("Unban", discord.ButtonStyle.success, "unban"),
+           
+ ("Unban", discord.ButtonStyle.success, "unban"),
         ]:
             btn = Button(label=label, style=style)
             btn.callback = self.make_callback(attr)
@@ -427,27 +492,31 @@ class ModeratieView(View):
         try:
             sel_vals = interaction.data.get("values", [])
             if sel_vals:
-                selected_id = int(sel_vals[0])
+    
+            selected_id = int(sel_vals[0])
                 selected = interaction.guild.get_member(selected_id) or await interaction.guild.fetch_member(selected_id)
             else:
                 selected = None
         except Exception:
             selected = None
         if selected is None:
-            await interaction.response.send_message("❌ Kon gebruiker niet vinden.", ephemeral=True)
+ 
+           await interaction.response.send_message("❌ Kon gebruiker niet vinden.", ephemeral=True)
             return
         self.target_member = selected
         await interaction.response.send_message(f"✅ Gebruiker gekozen: {self.target_member.mention}", ephemeral=True)
     def make_callback(self, actie: str):
         async def callback(interaction: discord.Interaction):
             permitted = UNBAN_ROLES if actie == "unban" else ALLOWED_ROLES
-            if not any(r.id in permitted for r in interaction.user.roles):
+          
+  if not any(r.id in permitted for r in interaction.user.roles):
                 await interaction.response.send_message("❌ Je hebt hier geen toestemming voor.", ephemeral=True)
                 return
             if actie == "unban":
                 await interaction.response.send_modal(UnbanModal())
                 return
-            if self.target_member is None:
+  
+          if self.target_member is None:
                 await interaction.response.send_message("❌ Kies eerst een gebruiker.", ephemeral=True)
                 return
             self.actie = actie
@@ -455,7 +524,8 @@ class ModeratieView(View):
         return callback
 @bot.tree.command(name="moderatie", description="Open het moderatie UI menu", guild=discord.Object(id=GUILD_ID))
 async def moderatie(interaction: discord.Interaction):
-    if not any(r.id in (ALLOWED_ROLES | UNBAN_ROLES) for r in interaction.user.roles):
+    
+if not any(r.id in (ALLOWED_ROLES | UNBAN_ROLES) for r in interaction.user.roles):
         await interaction.response.send_message("❌ Je hebt geen toegang tot dit menu.", ephemeral=True)
         return
     await interaction.response.send_message("Moderatie menu:", view=ModeratieView(interaction.user), ephemeral=True)
@@ -467,7 +537,8 @@ def has_refund_role(interaction: discord.Interaction) -> bool:
 # ------------------- Debug Commands -------------------
 @bot.tree.command(name="checkban", description="Check of een user ID geband is in deze server", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user_id="Discord user ID (alleen cijfers)")
-async def checkban(interaction: discord.Interaction, user_id: str):
+async def checkban(interaction: discord.Interaction, 
+user_id: str):
     if not has_allowed_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
         return
@@ -479,7 +550,8 @@ async def checkban(interaction: discord.Interaction, user_id: str):
     try:
         bans = await interaction.guild.bans()
     except TypeError:
-        bans = [b async for b in interaction.guild.bans()]
+    
+    bans = [b async for b in interaction.guild.bans()]
     ban_entry = next((b for b in bans if b.user.id == uid), None)
     if ban_entry:
         reason = ban_entry.reason or "Geen reden opgegeven"
@@ -487,7 +559,8 @@ async def checkban(interaction: discord.Interaction, user_id: str):
             title="User is geband",
             description=f"Gebruiker: {ban_entry.user} ({ban_entry.user.id})\nReden: {reason}",
             color=discord.Color.red()
-        )
+    
+    )
         await interaction.response.send_message(embed=emb, ephemeral=True)
     else:
         await interaction.response.send_message("❌ Deze user ID is niet geband in deze server.", ephemeral=True)
@@ -497,7 +570,8 @@ async def listbans(interaction: discord.Interaction, limit: int = 10):
     if not has_allowed_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
         return
-    if limit < 1 or limit > 25:
+    if limit < 1 or limit > 
+25:
         await interaction.response.send_message("❌ Limit tussen 1 en 25.", ephemeral=True)
         return
     try:
@@ -508,9 +582,11 @@ async def listbans(interaction: discord.Interaction, limit: int = 10):
         await interaction.response.send_message("🔎 Geen bans gevonden in deze server.", ephemeral=True)
         return
     lines = []
-    for i, b in enumerate(bans[:limit], start=1):
+    for i, 
+b in enumerate(bans[:limit], start=1):
         reason = b.reason or "Geen reden"
-        lines.append(f"{i}. {b.user} — {b.user.id} — {reason}")
+        lines.append(f"{i}.
+{b.user} — {b.user.id} — {reason}")
     emb = discord.Embed(
         title=f"Laatst {min(limit,len(bans))} bans",
         description="\n".join(lines),
@@ -523,7 +599,8 @@ async def listbans(interaction: discord.Interaction, limit: int = 10):
 async def clear(interaction: discord.Interaction, amount: str):
     CLEAR_ALLOWED_ROLES = {1409557291329392745}
     if not any(r.id in CLEAR_ALLOWED_ROLES for r in interaction.user.roles):
-        await interaction.response.send_message("❌ Je hebt geen toestemming om dit commando te gebruiken.", ephemeral=True)
+        await interaction.response.send_message("❌ Je hebt geen toestemming om 
+dit commando te gebruiken.", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True)
     channel = interaction.channel
@@ -534,32 +611,46 @@ async def clear(interaction: discord.Interaction, amount: str):
             await interaction.followup.send("🧹 Alle berichten in dit kanaal zijn verwijderd!", ephemeral=True)
             return
         else:
-            num = int(amount)
+  
+          num = int(amount)
             if num < 1 or num > 1000:
                 await interaction.followup.send("❌ Je kan alleen tussen 1 en 1000 berichten verwijderen.", ephemeral=True)
                 return
             deleted_msgs = await channel.purge(limit=num)
-            deleted = len(deleted_msgs)
+           
+ deleted = len(deleted_msgs)
             await interaction.followup.send(f"🧹 {deleted} berichten verwijderd.", ephemeral=True)
     except ValueError:
         await interaction.followup.send("❌ Ongeldig aantal, gebruik een getal of 'all'.", ephemeral=True)
 # ------------------- Refund Notification Embed -------------------
-def build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo):
-    embed = discord.Embed(title="Refund Bevestigd", description=f"De refund voor {user.mention} is succesvol bevestigd.", color=discord.Color.green())
-    embed.add_field(name="Refund Details", value=f"Is dit de refund die je aan {user.mention} wilt geven?")
-    embed.add_field(name="Refund ID", value=str(refund_id))
+def build_refund_dm_embed(refund_id, user, moderator, refund_type, item, amount, weapon, ammo):
+    embed = discord.Embed(title="Refund Bevestigd",
+                          description=f"Je refund is bevestigd door {moderator.mention}, hieronder vind je de details.",
+                          color=discord.Color.green())
+    embed.add_field(name="Refund ID", value=str(refund_id), inline=False)
+
     type_map = {'item': 'Item', 'weapon': 'Wapen', 'money': 'Geld', 'black_money': 'Zwart Geld'}
-    embed.add_field(name="Type", value=type_map.get(refund_type, refund_type))
+    embed.add_field(name="Type", value=type_map.get(refund_type, refund_type), inline=True)
+
+    details = []
     if item:
-        embed.add_field(name="Item", value=item)
+        details.append(f"**Item:** {item}")
     if weapon:
-        embed.add_field(name="Wapen", value=weapon)
+        details.append(f"**Wapen:** {weapon}")
     if amount:
-        embed.add_field(name="Aantal", value=str(amount))
+        details.append(f"**Aantal:** {amount}")
     if ammo:
-        embed.add_field(name="Aantal", value=str(ammo))  # or "Ammo"
-    embed.add_field(name="Hoe claim je je refund", value="1. Ga in-game\n2. Open het refund menu met /refunds\n3. Claim je refund")
+        details.append(f"**Ammo:** {ammo}")
+    
+    if details:
+        embed.add_field(name="Details", value="\n".join(details), inline=True)
+
+    embed.add_field(name="Hoe claim je je refund",
+                    value="Volg deze stappen om je refund te claimen:\n1. Ga in-game\n2. Open het refundmenu met /refunds\n3. Claim je refund",
+                    inline=False)
+    embed.set_footer(text="LD Refund Bot")
     return embed
+
 # ------------------- Add Refund Command -------------------
 @bot.tree.command(name="addrefund", description="Voeg een refund toe voor een gebruiker", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
@@ -576,7 +667,9 @@ def build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo)
     Choice(name="Money", value="money"),
     Choice(name="Black Money", value="black_money"),
 ])
-async def addrefund(interaction: discord.Interaction, user: discord.User, refund_type: str, item: str = None, amount: int = None, weapon: str = None, ammo: int = None):
+@app_commands.autocomplete(item=fetch_items)
+async def addrefund(interaction: discord.Interaction, user: discord.User, 
+refund_type: str, item: str = None, amount: int = None, weapon: str = None, ammo: int = None):
     if not has_refund_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
         return
@@ -585,7 +678,8 @@ async def addrefund(interaction: discord.Interaction, user: discord.User, refund
         await interaction.followup.send("❌ Geen verbinding met de database.", ephemeral=True)
         return
     # Validate input based on type
-    if refund_type not in ['item', 'weapon', 'money', 'black_money']:
+    if refund_type 
+not in ['item', 'weapon', 'money', 'black_money']:
         await interaction.followup.send("❌ Ongeldig refund type.", ephemeral=True)
         return
     insert_item = None
@@ -595,7 +689,8 @@ async def addrefund(interaction: discord.Interaction, user: discord.User, refund
     if refund_type == 'item':
         if not item or not amount:
             await interaction.followup.send("❌ Item en amount vereist voor type 'item'.", ephemeral=True)
-            return
+         
+   return
         insert_item = item
         insert_amount = amount
     elif refund_type == 'weapon':
@@ -604,50 +699,75 @@ async def addrefund(interaction: discord.Interaction, user: discord.User, refund
             return
         insert_weapon = weapon
         insert_ammo = ammo or 0
-    elif refund_type in ['money', 'black_money']:
+    elif refund_type in 
+['money', 'black_money']:
         if not amount:
             await interaction.followup.send("❌ Amount vereist voor type 'money' of 'black_money'.", ephemeral=True)
             return
         insert_amount = amount
         insert_ammo = 0
-    description = f"{refund_type}"
-    if item:
-        description += f" {item}"
-    if weapon:
-        description += f" {weapon}"
-    if amount:
-        description += f" x{amount}"
-    if ammo:
-        description += f" (ammo: {ammo})"
+    
+    # New Confirmation Embed
+    confirm_embed = discord.Embed(
+        title="Bevestiging",
+        description=f"Weet je zeker dat je onderstaande refund aan {user.mention} wilt geven?",
+        color=discord.Color.orange()
+    )
+    type_map = {'item': 'Item', 'weapon': 'Wapen', 'money': 'Geld', 'black_money': 'Zwart Geld'}
+    confirm_embed.add_field(name="Type", value=type_map.get(refund_type, refund_type), inline=False)
+    
+    details = []
+    if insert_item: details.append(f"**Item:** {insert_item}")
+    if insert_weapon: details.append(f"**Wapen:** {insert_weapon}")
+    if insert_amount: details.append(f"**Aantal:** {insert_amount}")
+    if insert_ammo: details.append(f"**Ammo:** {insert_ammo}")
+    if details:
+        confirm_embed.add_field(name="Details", value="\n".join(details), inline=False)
+    
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, item, amount, weapon, ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=180)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.success)
+        async def confirm_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                
+                # Send DM to user
+                dm_embed = build_refund_dm_embed(refund_id, user, interaction.user, refund_type, item, amount, weapon, ammo)
+                await try_send_dm(user, embed=dm_embed)
+
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                
+                await interaction.edit_original_response(content=f"✅ Refund voor {user.mention} is bevestigd.", view=None, embed=None)
+
+            except Exception as e:
+                await interaction.edit_original_response(content=f"❌ Fout bij bevestigen: {str(e)}", view=None, embed=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            await interaction.edit_original_response(content="❌ Refund geannuleerd.", view=None, embed=None)
+
+    await interaction.followup.send(embed=confirm_embed, view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Annuleer Command -------------------
 @bot.tree.command(name="refund_annuleer", description="Annuleer een refund via ID", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(refund_id="Refund ID")
@@ -660,11 +780,13 @@ async def refund_annuleer(interaction: discord.Interaction, refund_id: int):
         await interaction.followup.send("❌ Geen verbinding met de database.", ephemeral=True)
         return
     try:
-        async with pool.acquire() as conn:
+        async 
+with pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("UPDATE ld_refunds SET status = 'canceled', canceled_at = %s WHERE id = %s AND status = 'pending'", (datetime.now(timezone.utc), refund_id))
                 if cur.rowcount == 0:
-                    await interaction.followup.send("❌ Refund niet gevonden of al geclaimd/geannuleerd.", ephemeral=True)
+                    await interaction.followup.send("❌ Refund niet gevonden of al 
+geclaimd/geannuleerd.", ephemeral=True)
                     return
         # Log
         log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
@@ -672,7 +794,8 @@ async def refund_annuleer(interaction: discord.Interaction, refund_id: int):
             log_embed = discord.Embed(title="Refund Geannuleerd", description=f"Door {interaction.user.mention}: Refund ID {refund_id}", color=discord.Color.red())
             await log_chan.send(embed=log_embed)
         await interaction.followup.send(f"✅ Refund ID {refund_id} geannuleerd.", ephemeral=True)
-    except Exception as e:
+   
+ except Exception as e:
         await interaction.followup.send(f"❌ Fout bij annuleren: {str(e)}", ephemeral=True)
 # ------------------- Refund Informatie Gebruiker Command -------------------
 @bot.tree.command(name="refund_informatie_gebruiker", description="Krijg informatie over refunds van een gebruiker", guild=discord.Object(id=GUILD_ID))
@@ -684,7 +807,8 @@ async def refund_informatie_gebruiker(interaction: discord.Interaction, user: di
     await interaction.response.defer(ephemeral=True)
     refunds = await get_refunds(user.id)
     if not refunds:
-        await interaction.followup.send(f"Geen refunds voor {user.mention}.", ephemeral=True)
+        await interaction.followup.send(f"Geen refunds 
+voor {user.mention}.", ephemeral=True)
         return
     embed = discord.Embed(title=f"Refunds voor {user.name}", color=discord.Color.blue())
     for refund in refunds:
@@ -693,7 +817,8 @@ async def refund_informatie_gebruiker(interaction: discord.Interaction, user: di
             desc += f"\nItem: {refund['item']} x{refund['amount']}"
         if refund['weapon']:
             desc += f"\nWapen: {refund['weapon']} (ammo: {refund['ammo']})"
-        if refund['amount'] and not refund['item']:
+        if refund['amount'] 
+and not refund['item']:
             desc += f"\nAantal: {refund['amount']}"
         embed.add_field(name=f"Refund {refund['id']}", value=desc, inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
@@ -706,7 +831,8 @@ async def refund_informatie_id(interaction: discord.Interaction, refund_id: int)
         return
     await interaction.response.defer(ephemeral=True)
     refund = await get_refund(refund_id)
-    if not refund:
+ 
+   if not refund:
         await interaction.followup.send("Geen refund gevonden met dat ID.", ephemeral=True)
         return
     embed = discord.Embed(title=f"Refund {refund['id']}", color=discord.Color.blue())
@@ -717,7 +843,8 @@ async def refund_informatie_id(interaction: discord.Interaction, refund_id: int)
         desc += f"\nCanceled: {refund['canceled_at']}"
     if refund['item']:
         desc += f"\nItem: {refund['item']} x{refund['amount']}"
-    if refund['weapon']:
+    
+if refund['weapon']:
         desc += f"\nWapen: {refund['weapon']} (ammo: {refund['ammo']})"
     if refund['amount'] and not refund['item']:
         desc += f"\nAantal: {refund['amount']}"
@@ -730,45 +857,63 @@ async def refund_geef_geld(interaction: discord.Interaction, user: discord.User,
     if not has_refund_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
         return
-    await interaction.response.defer(ephemeral=True)
+ 
+   await interaction.response.defer(ephemeral=True)
     refund_type = 'money'
     insert_amount = amount
     insert_item = None
     insert_weapon = None
     insert_ammo = 0
-    description = f"Geld x{amount}"
+
+    confirm_embed = discord.Embed(title="Bevestiging", description=f"Weet je zeker dat je onderstaande refund aan {user.mention} wilt geven?", color=discord.Color.orange())
+    confirm_embed.add_field(name="Type", value="Geld", inline=False)
+    confirm_embed.add_field(name="Bedrag", value=f"${insert_amount}", inline=False)
+
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=180)
+        
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.success)
+        async def confirm_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                
+                dm_embed = build_refund_dm_embed(refund_id, user, interaction.user, refund_type, None, insert_amount, None, None)
+                await try_send_dm(user, embed=dm_embed)
+
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: Geld x{amount}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                
+                await interaction.edit_original_response(content=f"✅ Refund voor {user.mention} bevestigd.", view=None, embed=None)
+            except Exception as e:
+                await interaction.edit_original_response(content=f"❌ Fout bij bevestigen: {str(e)}", view=None, embed=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            await interaction.edit_original_response(content="❌ Refund geannuleerd.", view=None, embed=None)
+            
+    await interaction.followup.send(embed=confirm_embed, view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Item Command -------------------
 @bot.tree.command(name="refund_geef_item", description="Geef een refund voor een item", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", item="Item naam", amount="Aantal")
+@app_commands.autocomplete(item=fetch_items)
 async def refund_geef_item(interaction: discord.Interaction, user: discord.User, item: str, amount: int):
     if not has_refund_role(interaction):
         await interaction.response.send_message("❌ Je hebt geen permissie om dit commando te gebruiken.", ephemeral=True)
@@ -779,36 +924,52 @@ async def refund_geef_item(interaction: discord.Interaction, user: discord.User,
     insert_amount = amount
     insert_weapon = None
     insert_ammo = 0
-    description = f"Item {item} x{amount}"
+    
+    confirm_embed = discord.Embed(title="Bevestiging", description=f"Weet je zeker dat je onderstaande refund aan {user.mention} wilt geven?", color=discord.Color.orange())
+    confirm_embed.add_field(name="Type", value="Item", inline=False)
+    confirm_embed.add_field(name="Details", value=f"**Item:** {insert_item}\n**Aantal:** {insert_amount}", inline=False)
+
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=180)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.success)
+        async def confirm_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                
+                dm_embed = build_refund_dm_embed(refund_id, user, interaction.user, refund_type, insert_item, insert_amount, None, None)
+                await try_send_dm(user, embed=dm_embed)
+
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: Item {item} x{amount}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                
+                await interaction.edit_original_response(content=f"✅ Refund voor {user.mention} bevestigd.", view=None, embed=None)
+            except Exception as e:
+                await interaction.edit_original_response(content=f"❌ Fout bij bevestigen: {str(e)}", view=None, embed=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            await interaction.edit_original_response(content="❌ Refund geannuleerd.", view=None, embed=None)
+
+    await interaction.followup.send(embed=confirm_embed, view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Wapen Command -------------------
 @bot.tree.command(name="refund_geef_wapen", description="Geef een refund voor een wapen", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", weapon="Weapon naam", ammo="Ammo (optioneel)")
@@ -821,37 +982,54 @@ async def refund_geef_wapen(interaction: discord.Interaction, user: discord.User
     insert_weapon = weapon
     insert_ammo = ammo
     insert_item = None
-    insert_amount = None
-    description = f"Wapen {weapon} (ammo: {ammo})"
+    insert_amount 
+= None
+    
+    confirm_embed = discord.Embed(title="Bevestiging", description=f"Weet je zeker dat je onderstaande refund aan {user.mention} wilt geven?", color=discord.Color.orange())
+    confirm_embed.add_field(name="Type", value="Wapen", inline=False)
+    confirm_embed.add_field(name="Details", value=f"**Wapen:** {insert_weapon}\n**Ammo:** {insert_ammo}", inline=False)
+
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=180)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.success)
+        async def confirm_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                
+                dm_embed = build_refund_dm_embed(refund_id, user, interaction.user, refund_type, None, None, insert_weapon, insert_ammo)
+                await try_send_dm(user, embed=dm_embed)
+
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: Wapen {weapon} (ammo: {ammo})\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                
+                await interaction.edit_original_response(content=f"✅ Refund voor {user.mention} bevestigd.", view=None, embed=None)
+            except Exception as e:
+                await interaction.edit_original_response(content=f"❌ Fout bij bevestigen: {str(e)}", view=None, embed=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            await interaction.edit_original_response(content="❌ Refund geannuleerd.", view=None, embed=None)
+            
+    await interaction.followup.send(embed=confirm_embed, view=ConfirmationView(), ephemeral=True)
 # ------------------- Refund Geef Zwartgeld Command -------------------
 @bot.tree.command(name="refund_geef_zwartgeld", description="Geef een refund in zwart geld", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", amount="Bedrag")
@@ -864,37 +1042,54 @@ async def refund_geef_zwartgeld(interaction: discord.Interaction, user: discord.
     insert_amount = amount
     insert_item = None
     insert_weapon = None
-    insert_ammo = 0
-    description = f"Zwart Geld x{amount}"
+    insert_ammo = 
+0
+    
+    confirm_embed = discord.Embed(title="Bevestiging", description=f"Weet je zeker dat je onderstaande refund aan {user.mention} wilt geven?", color=discord.Color.orange())
+    confirm_embed.add_field(name="Type", value="Zwart Geld", inline=False)
+    confirm_embed.add_field(name="Bedrag", value=f"${insert_amount}", inline=False)
+
     class ConfirmationView(View):
-        @discord.ui.select(placeholder="Bevestig de refund", options=[SelectOption(label="Bevestigen", value="confirm"), SelectOption(label="Annuleren", value="cancel")])
-        async def select_callback(self, select_interaction: discord.Interaction, select: Select):
-            if select.values[0] == "confirm":
-                try:
-                    async with pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """
-                                INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                                """,
-                                (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                            )
-                            refund_id = cur.lastrowid
-                    # Send notification embed to the channel
-                    embed = build_refund_embed(refund_id, user, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
-                    await interaction.channel.send(embed=embed)
-                    # Log
-                    log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
-                    if log_chan:
-                        log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: {description}\nID: {refund_id}", color=discord.Color.blue())
-                        await log_chan.send(embed=log_embed)
-                    await select_interaction.response.edit_message(content=f"✅ Refund bevestigd.", view=None)
-                except Exception as e:
-                    await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen: {str(e)}", view=None)
-            else:
-                await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
-    await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
+        def __init__(self):
+            super().__init__(timeout=180)
+
+        @discord.ui.button(label="Bevestigen", style=discord.ButtonStyle.success)
+        async def confirm_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO ld_refunds (discord_id, refund_type, item, amount, weapon, ammo, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                            """,
+                            (user.id, refund_type, insert_item, insert_amount, insert_weapon, insert_ammo)
+                        )
+                        refund_id = cur.lastrowid
+                
+                dm_embed = build_refund_dm_embed(refund_id, user, interaction.user, refund_type, None, insert_amount, None, None)
+                await try_send_dm(user, embed=dm_embed)
+
+                log_chan = interaction.guild.get_channel(REFUND_LOG_CHANNEL_ID)
+                if log_chan:
+                    log_embed = discord.Embed(title="Refund Aangemaakt", description=f"Door {interaction.user.mention} voor {user.mention}: Zwart Geld x{amount}\nID: {refund_id}", color=discord.Color.blue())
+                    await log_chan.send(embed=log_embed)
+                
+                await interaction.edit_original_response(content=f"✅ Refund voor {user.mention} bevestigd.", view=None, embed=None)
+            except Exception as e:
+                await interaction.edit_original_response(content=f"❌ Fout bij bevestigen: {str(e)}", view=None, embed=None)
+
+        @discord.ui.button(label="Annuleren", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, button_interaction: discord.Interaction, button: Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message("Je kan niet op deze knop drukken.", ephemeral=True)
+                return
+            await interaction.edit_original_response(content="❌ Refund geannuleerd.", view=None, embed=None)
+
+    await interaction.followup.send(embed=confirm_embed, view=ConfirmationView(), ephemeral=True)
 # ------------------- Ticket Modal -------------------
 class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
     def __init__(self, ticket_type: str):
@@ -904,7 +1099,8 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
             label="Reden van je ticket",
             placeholder="Beschrijf kort waarom je dit ticket opent...",
             style=discord.TextStyle.short,
-            required=True,
+   
+         required=True,
             max_length=200
         )
         self.add_item(self.reason)
@@ -912,7 +1108,8 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
             label="Extra informatie",
             placeholder="Voeg extra details toe zodat staff je sneller kan helpen.",
             style=discord.TextStyle.paragraph,
-            required=False,
+       
+     required=False,
             max_length=1000
         )
         self.add_item(self.info)
@@ -921,14 +1118,16 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
         category = guild.get_channel(TICKET_CATEGORY_ID)
         if not category or not isinstance(category, discord.CategoryChannel):
             await interaction.response.send_message("❌ Ticket categorie niet gevonden!", ephemeral=True)
-            return
+       
+     return
         for ch in category.channels:
             if ch.name == f"ticket-{interaction.user.id}":
                 await interaction.response.send_message(f"❌ Je hebt al een ticket: {ch.mention}", ephemeral=True)
                 return
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, embed_links=True),
+      
+      interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, embed_links=True),
         }
         for rid in TICKET_STAFF_ROLES:
             role = guild.get_role(rid)
@@ -936,7 +1135,8 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
         channel_name = f"{self.ticket_type.lower().replace(' ', '-')}-{interaction.user.id}"
         ticket_channel = await category.create_text_channel(
-            name=channel_name,
+  
+          name=channel_name,
             overwrites=overwrites
         )
         emb = discord.Embed(
@@ -944,7 +1144,8 @@ class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
             description=f"Door: {interaction.user.mention}\n\nReden: {self.reason.value}\n\nExtra info: {self.info.value if self.info.value else 'Geen extra info'}",
             color=discord.Color.blurple()
         )
-        await ticket_channel.send(content=f"{interaction.user.mention} Ticket aangemaakt!", embed=emb, view=CloseTicketView())
+  
+      await ticket_channel.send(content=f"{interaction.user.mention} Ticket aangemaakt!", embed=emb, view=CloseTicketView())
         await interaction.response.send_message(f"✅ Ticket aangemaakt: {ticket_channel.mention}", ephemeral=True)
 # ------------------- Dropdown Menu -------------------
 class TicketDropdown(discord.ui.Select):
@@ -953,7 +1154,8 @@ class TicketDropdown(discord.ui.Select):
             discord.SelectOption(label="Algemene Vragen", emoji="❓"),
             discord.SelectOption(label="Klachten (Spelers)", emoji="👤"),
             discord.SelectOption(label="Klachten (Staff)", emoji="🛑"),
-            discord.SelectOption(label="Ingame Refund", emoji="💰"),
+            discord.SelectOption(label="Ingame Refund", 
+emoji="💰"),
             discord.SelectOption(label="Unban Aanvraag (Discord)", emoji="💬"),
             discord.SelectOption(label="Unban Aanvraag (TX-Admin)", emoji="🖥️"),
             discord.SelectOption(label="Unban Aanvraag (Anticheat)", emoji="⚠️"),
@@ -961,7 +1163,8 @@ class TicketDropdown(discord.ui.Select):
             discord.SelectOption(label="Donaties", emoji="💎"),
         ]
         super().__init__(placeholder="📌 Kies een ticket type...", min_values=1, max_values=1, options=options)
-    async def callback(self, interaction: discord.Interaction):
+    async 
+def callback(self, interaction: discord.Interaction):
         ticket_type = self.values[0]
         await interaction.response.send_modal(TicketReasonModal(ticket_type))
 # ------------------- Dropdown View -------------------
@@ -976,7 +1179,8 @@ class CloseTicketView(discord.ui.View):
     @discord.ui.button(label="❌ Sluit ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not any(r.id in TICKET_STAFF_ROLES for r in interaction.user.roles):
-            await interaction.response.send_message("❌ Alleen staff kan tickets sluiten.", ephemeral=True)
+ 
+           await interaction.response.send_message("❌ Alleen staff kan tickets sluiten.", ephemeral=True)
             return
         await interaction.channel.delete()
 # ------------------- Ticket Setup Command -------------------
@@ -987,7 +1191,8 @@ async def ticketsetup(interaction: discord.Interaction):
         return
     emb = discord.Embed(
         title="🎫 Tickets",
-        description="Selecteer hieronder het type ticket dat je wilt openen.",
+     
+   description="Selecteer hieronder het type ticket dat je wilt openen.",
         color=discord.Color.blurple()
     )
     await interaction.channel.send(embed=emb, view=TicketDropdownView())
@@ -999,7 +1204,8 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
         if interaction.response.is_done():
             await interaction.followup.send(f"❌ Er ging iets mis: {error}", ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Er ging iets mis: {error}", ephemeral=True)
+            await 
+interaction.response.send_message(f"❌ Er ging iets mis: {error}", ephemeral=True)
     except:
         pass
     import traceback
@@ -1010,7 +1216,8 @@ class SafeView(discord.ui.View):
             if interaction.response.is_done():
                 await interaction.followup.send("❌ Fout bij uitvoeren van deze knop/select.", ephemeral=True)
             else:
-                await interaction.response.send_message("❌ Fout bij uitvoeren van deze knop/select.", ephemeral=True)
+ 
+               await interaction.response.send_message("❌ Fout bij uitvoeren van deze knop/select.", ephemeral=True)
         except:
             pass
         import traceback
