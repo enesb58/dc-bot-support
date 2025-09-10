@@ -11,7 +11,7 @@ from discord import SelectOption
 from flask import Flask
 from threading import Thread
 pool = None
-------------------- Keep Alive Webserver -------------------
+# ------------------- Keep Alive Webserver -------------------
 app = Flask('')
 @app.route('/')
 def home():
@@ -21,7 +21,7 @@ app.run(host='0.0.0.0', port=8080)
 def keep_alive():
 t = Thread(target=run)
 t.start()
-------------------- Config -------------------
+#------------------- Config -------------------
 GUILD_ID = 1409557290918477826
 FIVEM_API = os.getenv("FIVEM_API") or "http://94.130.130.24:3024/refund"
 Moderation roles allowed
@@ -42,7 +42,7 @@ TICKET_STAFF_ROLES = {1409557291329392744}
 TICKET_LOG_CHANNEL_ID = 1409557293283934247
 REFUND_ROLE_ID = 1414363765272477818
 REFUND_LOG_CHANNEL_ID = 1409557293283934247  # Assume same as other logs
-------------------- Bot -------------------
+#------------------- Bot -------------------
 intents = discord.Intents.default()
 intents.message_content = True
 intents.reactions = True
@@ -65,7 +65,7 @@ async with conn.cursor(aiomysql.DictCursor) as cur:
 await cur.execute("SELECT * FROM ld_refunds WHERE id = %s", (refund_id,))
 results = await cur.fetchall()
 return results[0] if results else None
-------------------- Events -------------------
+#------------------- Events -------------------
 @bot.event
 async def on_ready():
 print(f"✅ Bot ingelogd als {bot.user}")
@@ -87,7 +87,7 @@ autocommit=True
 print("✅ Connected to MySQL database")
 except Exception as e:
 print(f"❌ Failed to connect to MySQL: {e}")
-------------------- Embed Modal -------------------
+#------------------- Embed Modal -------------------
 class EmbedModal(Modal, title="Maak een Embed"):
 titel = TextInput(label="Titel", style=discord.TextStyle.short, placeholder="Bijv. Mededeling", required=True, max_length=100)
 beschrijving = TextInput(label="Beschrijving", style=discord.TextStyle.paragraph, placeholder="Tekst die in de embed verschijnt", required=True, max_length=2000)
@@ -126,7 +126,7 @@ if not any(r.id in allowed_roles for r in interaction.user.roles):
 await interaction.response.send_message("❌ Je hebt geen toegang tot dit commando.", ephemeral=True)
 return
 await interaction.response.send_modal(EmbedModal())
-------------------- Role Embed Modal -------------------
+#------------------- Role Embed Modal -------------------
 class RoleEmbedModal(Modal, title="Maak een Role Embed"):
 titel = TextInput(
 label="Titel", style=discord.TextStyle.short,
@@ -241,7 +241,7 @@ if not any(r.id in allowed_roles for r in interaction.user.roles):
 await interaction.response.send_message("❌ Je hebt geen toegang tot dit commando.", ephemeral=True)
 return
 await interaction.response.send_modal(RoleEmbedModal())
-------------------- Reaction → Roles -------------------
+#------------------- Reaction → Roles -------------------
 async def handle_reaction(payload: discord.RawReactionActionEvent, add=True):
 emoji_map = getattr(bot, "role_embed_data", {}).get(payload.message_id)
 if not emoji_map:
@@ -274,7 +274,7 @@ await handle_reaction(payload, add=True)
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
 await handle_reaction(payload, add=False)
-------------------- Helpers -------------------
+#------------------- Helpers -------------------
 async def try_send_dm(user: discord.abc.Messageable, content: str):
 try:
 await user.send(content)
@@ -288,7 +288,7 @@ f"Reden: {reden}\n"
 f"Door: {moderator}\n"
 f"Tijd: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
 )
-------------------- Moderatie Modal -------------------
+#------------------- Moderatie Modal -------------------
 class ModeratieModal(Modal, title="Reden"):
 reden = TextInput(label="Reden", style=discord.TextStyle.paragraph, placeholder="Geef een reden", required=True)
 def init(self, view_ref):
@@ -403,7 +403,7 @@ timestamp=datetime.now(timezone.utc),
 )
 await log_channel.send(embed=emb)
 await interaction.response.send_message(f"✅ Unbanned: {ban_entry.user} ({ban_entry.user.id})", ephemeral=True)
-------------------- Moderatie View -------------------
+#------------------- Moderatie View -------------------
 class ModeratieView(View):
 def init(self, author: discord.Member):
 super().init(timeout=900.0)
@@ -560,7 +560,7 @@ if ammo:
 embed.add_field(name="Aantal", value=str(ammo))  # or "Ammo"
 embed.add_field(name="Hoe claim je je refund", value="1. Ga in-game\n2. Open het refund menu met /refunds\n3. Claim je refund")
 return embed
-------------------- Add Refund Command -------------------
+#------------------- Add Refund Command -------------------
 @bot.tree.command(name="addrefund", description="Voeg een refund toe voor een gebruiker", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
 user="De gebruiker",
@@ -648,7 +648,7 @@ await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen
 else:
 await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
 await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
-------------------- Refund Annuleer Command -------------------
+#------------------- Refund Annuleer Command -------------------
 @bot.tree.command(name="refund_annuleer", description="Annuleer een refund via ID", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(refund_id="Refund ID")
 async def refund_annuleer(interaction: discord.Interaction, refund_id: int):
@@ -674,7 +674,7 @@ await log_chan.send(embed=log_embed)
 await interaction.followup.send(f"✅ Refund ID {refund_id} geannuleerd.", ephemeral=True)
 except Exception as e:
 await interaction.followup.send(f"❌ Fout bij annuleren: {str(e)}", ephemeral=True)
-------------------- Refund Informatie Gebruiker Command -------------------
+#------------------- Refund Informatie Gebruiker Command -------------------
 @bot.tree.command(name="refund_informatie_gebruiker", description="Krijg informatie over refunds van een gebruiker", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker")
 async def refund_informatie_gebruiker(interaction: discord.Interaction, user: discord.User):
@@ -697,7 +697,7 @@ if refund['amount'] and not refund['item']:
 desc += f"\nAantal: {refund['amount']}"
 embed.add_field(name=f"Refund {refund['id']}", value=desc, inline=False)
 await interaction.followup.send(embed=embed, ephemeral=True)
-------------------- Refund Informatie ID Command -------------------
+#------------------- Refund Informatie ID Command -------------------
 @bot.tree.command(name="refund_informatie_id", description="Krijg informatie over een refund via ID", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(refund_id="Refund ID")
 async def refund_informatie_id(interaction: discord.Interaction, refund_id: int):
@@ -723,7 +723,7 @@ if refund['amount'] and not refund['item']:
 desc += f"\nAantal: {refund['amount']}"
 embed.description = desc
 await interaction.followup.send(embed=embed, ephemeral=True)
-------------------- Refund Geef Geld Command -------------------
+#------------------- Refund Geef Geld Command -------------------
 @bot.tree.command(name="refund_geef_geld", description="Geef een refund in geld", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", amount="Bedrag")
 async def refund_geef_geld(interaction: discord.Interaction, user: discord.User, amount: int):
@@ -766,7 +766,7 @@ await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen
 else:
 await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
 await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
-------------------- Refund Geef Item Command -------------------
+#------------------- Refund Geef Item Command -------------------
 @bot.tree.command(name="refund_geef_item", description="Geef een refund voor een item", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", item="Item naam", amount="Aantal")
 async def refund_geef_item(interaction: discord.Interaction, user: discord.User, item: str, amount: int):
@@ -809,7 +809,7 @@ await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen
 else:
 await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
 await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
-------------------- Refund Geef Wapen Command -------------------
+#------------------- Refund Geef Wapen Command -------------------
 @bot.tree.command(name="refund_geef_wapen", description="Geef een refund voor een wapen", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", weapon="Weapon naam", ammo="Ammo (optioneel)")
 async def refund_geef_wapen(interaction: discord.Interaction, user: discord.User, weapon: str, ammo: int = 0):
@@ -852,7 +852,7 @@ await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen
 else:
 await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
 await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
-------------------- Refund Geef Zwartgeld Command -------------------
+#------------------- Refund Geef Zwartgeld Command -------------------
 @bot.tree.command(name="refund_geef_zwartgeld", description="Geef een refund in zwart geld", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(user="De gebruiker", amount="Bedrag")
 async def refund_geef_zwartgeld(interaction: discord.Interaction, user: discord.User, amount: int):
@@ -895,7 +895,7 @@ await select_interaction.response.edit_message(content=f"❌ Fout bij bevestigen
 else:
 await select_interaction.response.edit_message(content="❌ Refund geannuleerd", view=None)
 await interaction.followup.send(f"Is dit de refund die je aan {user.mention} wilt geven? {description}", view=ConfirmationView(), ephemeral=True)
-------------------- Ticket Modal -------------------
+#------------------- Ticket Modal -------------------
 class TicketReasonModal(discord.ui.Modal, title="Ticket Reden en Info"):
 def init(self, ticket_type: str):
 super().init(timeout=None)
@@ -946,7 +946,7 @@ color=discord.Color.blurple()
 )
 await ticket_channel.send(content=f"{interaction.user.mention} Ticket aangemaakt!", embed=emb, view=CloseTicketView())
 await interaction.response.send_message(f"✅ Ticket aangemaakt: {ticket_channel.mention}", ephemeral=True)
-------------------- Dropdown Menu -------------------
+#------------------- Dropdown Menu -------------------
 class TicketDropdown(discord.ui.Select):
 def init(self):
 options = [
@@ -964,12 +964,12 @@ super().init(placeholder="📌 Kies een ticket type...", min_values=1, max_value
 async def callback(self, interaction: discord.Interaction):
 ticket_type = self.values[0]
 await interaction.response.send_modal(TicketReasonModal(ticket_type))
-------------------- Dropdown View -------------------
+#------------------- Dropdown View -------------------
 class TicketDropdownView(discord.ui.View):
 def init(self):
 super().init(timeout=None)
 self.add_item(TicketDropdown())
-------------------- Sluit-knop -------------------
+#------------------- Sluit-knop -------------------
 class CloseTicketView(discord.ui.View):
 def init(self):
 super().init(timeout=None)
@@ -979,7 +979,7 @@ if not any(r.id in TICKET_STAFF_ROLES for r in interaction.user.roles):
 await interaction.response.send_message("❌ Alleen staff kan tickets sluiten.", ephemeral=True)
 return
 await interaction.channel.delete()
-------------------- Ticket Setup Command -------------------
+#------------------- Ticket Setup Command -------------------
 @bot.tree.command(name="ticketsetup", description="Plaats ticket systeem in dit kanaal", guild=discord.Object(id=GUILD_ID))
 async def ticketsetup(interaction: discord.Interaction):
 if not has_allowed_role(interaction):
@@ -992,7 +992,7 @@ color=discord.Color.blurple()
 )
 await interaction.channel.send(embed=emb, view=TicketDropdownView())
 await interaction.response.send_message("✅ Ticket systeem geplaatst!", ephemeral=True)
-------------------- Error Handlers -------------------
+#------------------- Error Handlers -------------------
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
 try:
@@ -1015,7 +1015,7 @@ except:
 pass
 import traceback
 traceback.print_exception(type(error), error, error.traceback)
-------------------- Start Bot -------------------
+#------------------- Start Bot -------------------
 print("Booting up...")
 keep_alive()
 TOKEN = os.getenv("DISCORD_TOKEN")
