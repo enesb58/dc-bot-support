@@ -11,6 +11,9 @@ from discord import SelectOption
 from flask import Flask
 from threading import Thread
 import re
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import fetch from "node-fetch";
+const FIVEM_API = process.env.FIVEM_API || "http://localhost:30120/refund";
 
 # ------------------- Keep Alive Webserver -------------------
 app = Flask('')
@@ -811,6 +814,65 @@ class SafeView(discord.ui.View):
             pass
         import traceback
         traceback.print_exception(type(error), error, error.__traceback__)
+# discord bot je weet weo refund
+
+// Bot setup
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+// Slash commands
+const commands = [
+  new SlashCommandBuilder()
+    .setName("refund")
+    .setDescription("Geef een speler een refund via FiveM")
+    .addStringOption(opt =>
+      opt.setName("playerid").setDescription("Player ID").setRequired(true)
+    )
+    .addIntegerOption(opt =>
+      opt.setName("amount").setDescription("Bedrag").setRequired(true)
+    ),
+];
+
+// Commands registreren
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+(async () => {
+  try {
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands,
+    });
+    console.log("✅ Slash commands geregistreerd.");
+  } catch (err) {
+    console.error(err);
+  }
+})();
+
+// Command handler
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isCommand()) return;
+
+  if (interaction.commandName === "refund") {
+    const playerId = interaction.options.getString("playerid");
+    const amount = interaction.options.getInteger("amount");
+
+    try {
+      const res = await fetch(FIVEM_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId, amount }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        await interaction.reply(`✅ Refund van **${amount}** gegeven aan speler **${playerId}**.`);
+      } else {
+        await interaction.reply(`❌ Refund mislukt: ${data.error || "onbekende fout"}`);
+      }
+    } catch (err) {
+      console.error(err);
+      await interaction.reply("❌ Kon geen verbinding maken met FiveM API.");
+    }
+  }
+});
+
 
 # ------------------- Start Bot -------------------
 keep_alive()
