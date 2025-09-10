@@ -49,7 +49,7 @@ intents.reactions = True
 intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 bot.role_embed_data = {}  # Storage 
-for role embeds
+# for role embeds
 # ------------------- Database Helpers -------------------
 async def fetch_items(current_input: str):
     if not pool:
